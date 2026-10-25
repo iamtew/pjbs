@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Starfield — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, pointer, rand, clamp, wrap, glowSprite,
+    } from '../shared/boot.js';
+
+    // Cosmic flow field: streaked sparks + fat bokeh, same recipe as the
+    // Stupid Audio hero — particles ride a shifting vector field and stretch
+    // along travel so they read as light trails, not dots.
+    const COLORS = [0x7ec8ff, 0xc4b5fd, 0xff9ecd, 0x6ee7b7, 0xfde68a];
+
+    boot((app, PIXI, glow) => {
+      const { width: w0, height: h0 } = app.screen;
+      const n = clamp(Math.round((w0 * h0) / 2800), 180, 620);
+      const ps = [];
+
+      for (let i = 0; i < n; i++) {
+        const s = glowSprite(PIXI, glow, COLORS[i % COLORS.length]);
+        s.x = rand(0, w0);
+        s.y = rand(0, h0);
+        const big = Math.random() < 0.1;
+        s.size = big ? rand(1.4, 2.8) : rand(0.08, 0.32);
+        s.alpha = big ? rand(0.05, 0.14) : rand(0.4, 0.9);
+        s.speed = big ? rand(8, 22) : rand(30, 95);
+        app.stage.addChild(s);
+        ps.push(s);
+      }
+
+      app.ticker.add((ticker) => {
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        const t = performance.now() / 1000;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const px = pointer.x * w;
+        const py = pointer.y * h;
+        const r2 = 160 * 160;
+
+        for (const s of ps) {
+          const a =
+            (Math.sin(s.x * 0.0024 + t * 0.14) +
+              Math.cos(s.y * 0.0028 - t * 0.09)) *
+            Math.PI;
+          let vx = Math.cos(a) * s.speed;
+          let vy = Math.sin(a) * s.speed;
+          const dx = s.x - px;
+          const dy = s.y - py;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < r2) {
+            const f = (1 - d2 / r2) * 420 / Math.sqrt(d2 + 1);
+            vx += dx * f;
+            vy += dy * f;
+          }
+          s.x += vx * dt;
+          s.y += vy * dt;
+          s.rotation = Math.atan2(vy, vx);
+          s.scale.set(s.size * 2.8, s.size);
+          wrap(s, w, h);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

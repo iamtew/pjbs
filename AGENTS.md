@@ -5,6 +5,29 @@ backgrounds are individual HTML files that render an animation in the browser in
 these animations will be used in OBS as backgrounds.
 code can be shared between animations.
 
+Look of the Stupid Audio catalog (`audio.stupid.systems/fx.js`): additive glow sprites, multi-pass bloom lines, flow fields — not flat dots.
+
+## Layout
+- `index.html` — landing list of backgrounds
+- `bgs/*.html` — one fullscreen scene per file
+- `shared/boot.js` — PixiJS v8.22.0 from jsDelivr (`pixi.min.mjs`), plus `glowTexture` / `glowSprite` / `glowLine` / `wrap` / `pointer`
+- `shared/style.css` — fullscreen canvas reset
+
+No bundler.
+
+## Backgrounds
+Must loop or run forever (OBS browser sources). No finite timelines, no hard cuts.
+
+Current scenes:
+- `bgs/starfield.html` — five-color flow-field streaks + bokeh (pointer repel)
+- `bgs/aurora.html` — glow-pass ribbons over drifting fog
+- `bgs/hexpulse.html` — additive honeycomb with a traveling energy wave
+
+## Add a background
+1. New file `bgs/<name>.html` — `import { boot, glowSprite, glowLine, wrap } from '../shared/boot.js'`.
+2. Drive motion from `app.ticker` with wrap/modulo so it never ends. Clamp `dt`.
+3. Additive glow, not unlit `Graphics` outlines, unless the scene really wants wireframe.
+4. Add one link on `index.html`.
+
 ## Testing
 Meat Bag runs server on `localhost:8000` for testing and verification, if not running, remind Meat Bag to start it.
-

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hex pulse — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, rand, wrap, glowSprite, GLOW_PASSES,
+    } from '../shared/boot.js';
+
+    const CYAN = 0x00e0e0;
+    const MAGENTA = 0xff00ff;
+
+    boot((app, PIXI, glow) => {
+      const { width: w0, height: h0 } = app.screen;
+
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+
+      // Sparse sparks that hitch a ride on the wave.
+      const sparks = Array.from({ length: 48 }, (_, i) => {
+        const s = glowSprite(PIXI, glow, i % 2 ? CYAN : MAGENTA);
+        s.x = rand(0, w0);
+        s.y = rand(0, h0);
+        s.scale.set(rand(0.12, 0.35));
+        s.vx = rand(-20, 40);
+        s.vy = rand(-12, 12);
+        app.stage.addChild(s);
+        return s;
+      });
+
+      let cells = [];
+      const size = 36;
+      const wHex = size * 1.75;
+      const hHex = size * 1.52;
+
+      function layout() {
+        const w = app.screen.width;
+        const h = app.screen.height;
+        cells = [];
+        const cols = Math.ceil(w / wHex) + 2;
+        const rows = Math.ceil(h / hHex) + 2;
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            cells.push({
+              x: col * wHex + ((row & 1) ? wHex * 0.5 : 0),
+              y: row * hHex,
+              col,
+              row,
+            });
+          }
+        }
+      }
+
+      layout();
+      app.renderer.on('resize', layout);
+
+      function hexPts(cx, cy, r) {
+        const pts = [];
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI / 180) * (60 * i - 30);
+          pts.push(cx + r * Math.cos(a), cy + r * Math.sin(a));
+        }
+        return pts;
+      }
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+
+        g.clear();
+        for (const c of cells) {
+          const wave = (Math.sin(c.col * 0.32 + c.row * 0.2 - t * 1.35) + 1) * 0.5;
+          const hot = wave > 0.72;
+          const color = c.col % 4 === 0 ? MAGENTA : CYAN;
+          const pts = hexPts(c.x, c.y, size * (0.82 + 0.08 * wave));
+          g.poly(pts).fill({ color, alpha: 0.03 + wave * 0.16 });
+          if (hot) {
+            for (const [width, alpha] of GLOW_PASSES) {
+              g.poly(pts).stroke({
+                width: width * 0.18,
+                color,
+                alpha: alpha * wave * 0.85,
+              });
+            }
+          } else {
+            g.poly(pts).stroke({ width: 1.2, color, alpha: 0.12 + wave * 0.35 });
+          }
+        }
+
+        for (const s of sparks) {
+          s.x += s.vx * dt;
+          s.y += s.vy * dt + Math.sin(t * 2 + s.x * 0.01) * 8 * dt;
+          s.alpha = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * 3 + s.x * 0.02));
+          wrap(s, w, h);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aurora — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, rand, wrap, glowSprite, glowLine,
+    } from '../shared/boot.js';
+
+    const TEAL = 0x6fc3b8;
+    const INDIGO = 0x6d5cff;
+    const MAGENTA = 0xff4ad2;
+    const LIME = 0x6ee7b7;
+
+    boot((app, PIXI, glow) => {
+      const { width: w0, height: h0 } = app.screen;
+
+      // Big soft fog so the ribbons sit in atmosphere, not on black.
+      const fog = Array.from({ length: 18 }, (_, i) => {
+        const s = glowSprite(PIXI, glow, [TEAL, INDIGO, MAGENTA][i % 3]);
+        s.x = rand(0, w0);
+        s.y = rand(0, h0);
+        s.scale.set(rand(7, 14));
+        s.alpha = rand(0.06, 0.13);
+        s.vx = rand(-14, 14);
+        s.vy = rand(-8, 8);
+        app.stage.addChild(s);
+        return s;
+      });
+
+      const wave = new PIXI.Graphics();
+      wave.blendMode = 'add';
+      app.stage.addChild(wave);
+
+      const ribbons = [
+        { hue: TEAL, y: 0.38, amp: 0.12, thick: 1.15, speed: 0.55, phase: 0, freq: 1.1 },
+        { hue: INDIGO, y: 0.5, amp: 0.16, thick: 1.4, speed: 0.38, phase: 1.4, freq: 0.85 },
+        { hue: MAGENTA, y: 0.58, amp: 0.1, thick: 0.9, speed: 0.62, phase: 2.7, freq: 1.35 },
+        { hue: LIME, y: 0.44, amp: 0.08, thick: 0.7, speed: 0.48, phase: 4.1, freq: 1.7 },
+      ];
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+
+        for (const s of fog) {
+          s.x += s.vx * dt;
+          s.y += s.vy * dt;
+          wrap(s, w, h, 280);
+        }
+
+        wave.clear();
+        for (const r of ribbons) {
+          const pts = [];
+          const cy = h * r.y;
+          const amp = h * r.amp;
+          for (let x = -12; x <= w + 12; x += 6) {
+            const u = x / w;
+            const y =
+              cy +
+              amp * Math.sin(u * r.freq * Math.PI * 2 + t * r.speed + r.phase) +
+              amp * 0.35 * Math.sin(u * 3.2 * r.freq + t * r.speed * 0.55);
+            pts.push(x, y);
+          }
+          glowLine(wave, pts, r.hue, r.thick);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
