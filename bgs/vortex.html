@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vortex — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, pointer, hsl, glowSprite, rand, clamp,
+    } from '../shared/boot.js';
+
+    // Falling into a throat of light. Rings race the camera; sparks spiral
+    // inward. Hue crawls so the tunnel never settles.
+    const RINGS = 22;
+
+    boot((app, PIXI, glow) => {
+      const { width: w0, height: h0 } = app.screen;
+      const n = clamp(Math.round((w0 * h0) / 5000), 100, 220);
+
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+
+      const sparks = Array.from({ length: n }, () => {
+        const s = glowSprite(PIXI, glow, 0xffffff);
+        s.ang = rand(0, Math.PI * 2);
+        s.rad = rand(0.05, 1);
+        s.spin = rand(0.4, 1.6) * (Math.random() < 0.5 ? 1 : -1);
+        s.size = rand(0.08, 0.28);
+        app.stage.addChild(s);
+        return s;
+      });
+
+      const core = glowSprite(PIXI, glow, 0xffe8a0);
+      app.stage.addChild(core);
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const cx = w * (0.5 + (pointer.x - 0.5) * 0.08);
+        const cy = h * (0.5 + (pointer.y - 0.5) * 0.08);
+        const maxR = Math.hypot(w, h) * 0.72;
+
+        app.renderer.background.color = hsl((t * 10 + 20) % 360, 85, 8);
+
+        g.clear();
+        for (let i = 0; i < RINGS; i++) {
+          const u = ((i / RINGS) + t * 0.11) % 1;
+          const r = 12 + u * maxR;
+          const squash = 0.55 + 0.45 * u;
+          const color = hsl((t * 28 + u * 140) % 360, 95, 52);
+          const life = Math.pow(1 - u, 1.35);
+          // Two passes only — full GLOW_PASSES on 22 ellipses clips to white.
+          g.ellipse(cx, cy, r, r * squash).stroke({
+            width: 14 * (1 - u * 0.4),
+            color,
+            alpha: 0.06 * life,
+          });
+          g.ellipse(cx, cy, r, r * squash).stroke({
+            width: 2,
+            color,
+            alpha: 0.55 * life,
+          });
+        }
+
+        for (const s of sparks) {
+          s.rad -= dt * 0.18;
+          if (s.rad < 0.02) s.rad += 1;
+          s.ang += s.spin * dt * (1.2 + (1 - s.rad) * 2.2);
+          const r = s.rad * maxR;
+          const squash = 0.55 + 0.45 * s.rad;
+          s.x = cx + Math.cos(s.ang) * r;
+          s.y = cy + Math.sin(s.ang) * r * squash;
+          s.tint = hsl((t * 40 + s.ang * 40) % 360, 95, 62);
+          s.scale.set(s.size * (0.6 + 1.8 * (1 - s.rad)), s.size);
+          s.rotation = s.ang + Math.PI / 2;
+          s.alpha = 0.15 + 0.45 * (1 - s.rad);
+        }
+
+        const pulse = 0.5 + 0.5 * Math.sin(t * 2.2);
+        core.position.set(cx, cy);
+        core.scale.set(1.2 + 1.8 * pulse);
+        core.alpha = 0.28 + 0.32 * pulse;
+      });
+    }, { background: 0x1a0010 });
+  </script>
+</body>
+</html>

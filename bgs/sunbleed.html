@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sunbleed — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, pointer, hsl, glowSprite, glowLine, rand, clamp, wrap,
+    } from '../shared/boot.js';
+
+    // A living star that won't sit still. Corona particles orbit a heat-wash
+    // canvas; flare ribbons peel off the limb.
+    const COLORS = [0xff3b1f, 0xff7a18, 0xffe566, 0xff2bd6, 0xff6b9d];
+
+    boot((app, PIXI, glow) => {
+      const { width: w0, height: h0 } = app.screen;
+      const n = clamp(Math.round((w0 * h0) / 3200), 140, 480);
+
+      const corona = [];
+      for (let i = 0; i < n; i++) {
+        const s = glowSprite(PIXI, glow, COLORS[i % COLORS.length]);
+        s.ang = rand(0, Math.PI * 2);
+        s.rad = rand(0.15, 1.05);
+        s.spin = rand(0.08, 0.45) * (Math.random() < 0.5 ? 1 : -1);
+        const big = Math.random() < 0.12;
+        s.size = big ? rand(1.6, 3.2) : rand(0.1, 0.4);
+        s.alpha = big ? rand(0.06, 0.14) : rand(0.35, 0.9);
+        app.stage.addChild(s);
+        corona.push(s);
+      }
+
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+
+      const core = glowSprite(PIXI, glow, 0xfff4c2);
+      app.stage.addChild(core);
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const cx = w * (0.5 + (pointer.x - 0.5) * 0.06);
+        const cy = h * (0.52 + (pointer.y - 0.5) * 0.06);
+        const R = Math.min(w, h) * 0.22;
+
+        app.renderer.background.color = hsl(12 + 8 * Math.sin(t * 0.2), 90, 10 + 3 * Math.sin(t * 0.35));
+
+        for (const s of corona) {
+          s.ang += s.spin * dt;
+          s.rad += Math.sin(t * 0.7 + s.ang * 3) * 0.04 * dt;
+          const wobble = 1 + 0.12 * Math.sin(t * 1.3 + s.ang * 5);
+          const rr = R * (0.55 + s.rad * 2.1) * wobble;
+          s.x = cx + Math.cos(s.ang) * rr;
+          s.y = cy + Math.sin(s.ang) * rr * 0.92;
+          wrap(s, w, h, 80);
+          s.rotation = s.ang + Math.PI / 2;
+          s.scale.set(s.size * 2.2, s.size);
+        }
+
+        g.clear();
+        g.position.set(0, 0);
+        for (let f = 0; f < 5; f++) {
+          const pts = [];
+          const a0 = t * (0.15 + f * 0.03) + f * 1.256;
+          for (let i = 0; i <= 28; i++) {
+            const u = i / 28;
+            const a = a0 + u * 0.9 + 0.25 * Math.sin(u * 8 + t * 2 + f);
+            const r = R * (1.1 + u * 2.4 + 0.35 * Math.sin(u * 6 + t * 1.8 + f));
+            pts.push(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+          }
+          glowLine(g, pts, COLORS[f % COLORS.length], 1.05);
+        }
+
+        const beat = Math.pow(0.5 + 0.5 * Math.sin(t * 1.15), 1.4);
+        core.position.set(cx, cy);
+        core.scale.set(5 + 7 * beat);
+        core.alpha = 0.55 + 0.4 * beat;
+      });
+    }, { background: 0x2a0608 });
+  </script>
+</body>
+</html>

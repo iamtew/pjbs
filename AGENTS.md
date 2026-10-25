@@ -6,11 +6,12 @@ these animations will be used in OBS as backgrounds.
 code can be shared between animations.
 
 Look of the Stupid Audio catalog (`audio.stupid.systems/fx.js`): additive glow sprites, multi-pass bloom lines, flow fields — not flat dots.
+Canvas fill is not required to be black; scenes may wash/hue the renderer background.
 
 ## Layout
 - `index.html` — landing list of backgrounds
 - `bgs/*.html` — one fullscreen scene per file
-- `shared/boot.js` — PixiJS v8.22.0 from jsDelivr (`pixi.min.mjs`), plus `glowTexture` / `glowSprite` / `glowLine` / `wrap` / `pointer`
+- `shared/boot.js` — PixiJS v8.22.0 from jsDelivr (`pixi.min.mjs`), plus `glowTexture` / `glowSprite` / `glowLine` / `wrap` / `pointer` / `hsl`. `boot(setup, { background })` for a non-black start color.
 - `shared/style.css` — fullscreen canvas reset
 
 No bundler.
@@ -22,6 +23,9 @@ Current scenes:
 - `bgs/starfield.html` — five-color flow-field streaks + bokeh (pointer repel)
 - `bgs/aurora.html` — glow-pass ribbons over drifting fog
 - `bgs/hexpulse.html` — additive honeycomb with a traveling energy wave
+- `bgs/kaleido.html` — n-fold mandala, hue-crawling wash
+- `bgs/vortex.html` — concentric tunnel, sparks spiral in
+- `bgs/sunbleed.html` — orbiting corona on a heat canvas
 
 ## Add a background
 1. New file `bgs/<name>.html` — `import { boot, glowSprite, glowLine, wrap } from '../shared/boot.js'`.

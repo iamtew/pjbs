@@ -12,6 +12,18 @@ addEventListener('pointermove', (e) => {
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 export const rand = (lo, hi) => lo + Math.random() * (hi - lo);
 
+export function hsl(h, s, l) {
+  s /= 100;
+  l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * c);
+  };
+  return (f(0) << 16) | (f(8) << 8) | f(4);
+}
+
 export function wrap(s, w, h, m = 40) {
   if (s.x < -m) s.x += w + 2 * m; else if (s.x > w + m) s.x -= w + 2 * m;
   if (s.y < -m) s.y += h + 2 * m; else if (s.y > h + m) s.y -= h + 2 * m;
@@ -51,12 +63,12 @@ export function glowLine(g, pts, color, scale = 1, passes = GLOW_PASSES) {
   }
 }
 
-export async function boot(setup) {
+export async function boot(setup, opts = {}) {
   const PIXI = await import(PIXI_URL);
   const app = new PIXI.Application();
   await app.init({
     resizeTo: window,
-    background: 0x050508,
+    background: opts.background ?? 0x050508,
     antialias: true,
     autoDensity: true,
     resolution: Math.min(devicePixelRatio || 1, 2),

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaleido — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, pointer, hsl, glowLine, glowSprite, rand,
+    } from '../shared/boot.js';
+
+    // Rotating n-fold mandala. Petals are glow-pass curves; the wash is a
+    // living hue so this is never a black canvas.
+    const FOLDS = 10;
+
+    boot((app, PIXI, glow) => {
+      const { width: w0, height: h0 } = app.screen;
+
+      const bokeh = Array.from({ length: 16 }, (_, i) => {
+        const s = glowSprite(PIXI, glow, hsl(i * 40, 90, 60));
+        s.x = rand(0, w0);
+        s.y = rand(0, h0);
+        s.scale.set(rand(5, 11));
+        s.alpha = rand(0.08, 0.16);
+        s.ph = rand(0, 6.28);
+        app.stage.addChild(s);
+        return s;
+      });
+
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+
+      const core = glowSprite(PIXI, glow, 0xfff1c1);
+      core.blendMode = 'add';
+      app.stage.addChild(core);
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const cx = w * 0.5 + (pointer.x - 0.5) * 28;
+        const cy = h * 0.5 + (pointer.y - 0.5) * 18;
+        const reach = Math.hypot(w, h) * 0.42;
+
+        app.renderer.background.color = hsl((t * 8) % 360, 70, 7);
+
+        for (const s of bokeh) {
+          s.x = cx + Math.cos(t * 0.15 + s.ph) * reach * 0.55;
+          s.y = cy + Math.sin(t * 0.12 + s.ph * 1.3) * reach * 0.4;
+          s.tint = hsl((t * 18 + s.ph * 50) % 360, 95, 58);
+          s.alpha = 0.07 + 0.08 * (0.5 + 0.5 * Math.sin(t * 0.7 + s.ph));
+        }
+
+        g.clear();
+        g.position.set(cx, cy);
+        for (let k = 0; k < FOLDS; k++) {
+          const base = (k / FOLDS) * Math.PI * 2 + t * 0.18;
+          const pts = [];
+          for (let i = 0; i <= 36; i++) {
+            const u = i / 36;
+            const r =
+              reach *
+              (0.06 + 0.94 * u) *
+              (0.72 + 0.28 * Math.sin(u * 7 + t * 1.6 + k));
+            const a =
+              base +
+              0.42 * Math.sin(u * 5 + t * 1.1) +
+              0.18 * Math.sin(u * 13 - t * 1.7);
+            pts.push(Math.cos(a) * r, Math.sin(a) * r);
+          }
+          glowLine(g, pts, hsl((t * 22 + k * 36) % 360, 95, 58), 0.85 + 0.25 * Math.sin(t + k));
+        }
+
+        const breath = 0.5 + 0.5 * Math.sin(t * 1.4);
+        core.position.set(cx, cy);
+        core.scale.set(2.2 + 3.4 * breath);
+        core.alpha = 0.35 + 0.4 * breath;
+        core.tint = hsl((t * 14) % 360, 40, 85);
+      });
+    }, { background: 0x140018 });
+  </script>
+</body>
+</html>
