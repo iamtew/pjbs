@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Yantra — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, pointer, hsl, glowSprite, glowLine, rand, GLOW_PASSES,
+    } from '../shared/boot.js';
+    import { mountSettings, hexHsl } from '../shared/settings.js';
+
+    // Interlocking triangles + lotus ring + bindu. Sri Yantra energy, not a survey.
+    const PHI = 1.618;
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Yantra',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'tris', label: 'Triangles', min: 3, max: 12, step: 1, def: 9, int: true },
+            { key: 'petals', label: 'Lotus petals', min: 6, max: 24, step: 1, def: 20, int: true },
+            { key: 'spin', label: 'Spin', min: 0, max: 0.9, step: 0.01, def: 0.28 },
+            { key: 'breath', label: 'Breath', min: 0, max: 0.3, step: 0.01, def: 0.15 },
+            { key: 'thick', label: 'Line thick', min: 0.35, max: 2.4, step: 0.05, def: 1.2 },
+            { key: 'hue', label: 'Hue crawl', min: 0, max: 120, step: 1, def: 58, int: true },
+            { key: 'melt', label: 'Melt', min: 0, max: 1, step: 0.02, def: 0.75 },
+            { key: 'bokeh', label: 'Bokeh', min: 0, max: 24, step: 1, def: 16, int: true },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'upC', label: 'Up triangles', type: 'color', def: '#fb7185' },
+            { key: 'dnC', label: 'Down triangles', type: 'color', def: '#a78bfa' },
+            { key: 'lotusC', label: 'Lotus', type: 'color', def: '#f472b6' },
+            { key: 'coreC', label: 'Bindu', type: 'color', def: '#fff1c1' },
+            { key: 'wash', label: 'Wash', type: 'color', def: '#1a0010' },
+          ],
+        },
+        {
+          id: 'pointer',
+          label: 'Pointer',
+          fields: [
+            { key: 'drift', label: 'Follow', min: 0, max: 0.18, step: 0.01, def: 0.06 },
+          ],
+        },
+      ],
+    });
+
+    function triPts(r, rot) {
+      const pts = [];
+      for (let i = 0; i < 3; i++) {
+        const a = rot + i * (Math.PI * 2 / 3);
+        pts.push(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      pts.push(pts[0], pts[1]);
+      return pts;
+    }
+
+    function petalPts(r0, r1, a0, a1, steps) {
+      const pts = [];
+      for (let i = 0; i <= steps; i++) {
+        const u = i / steps;
+        const a = a0 + (a1 - a0) * u;
+        const bulge = Math.sin(u * Math.PI);
+        const r = r0 + (r1 - r0) * bulge;
+        pts.push(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      return pts;
+    }
+
+    boot((app, PIXI, glow) => {
+      let bokeh = [];
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+
+      const bindu = glowSprite(PIXI, glow, 0xfff1c1);
+      app.stage.addChild(bindu);
+
+      function spawnBokeh() {
+        const st = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        for (const spr of bokeh) spr.destroy();
+        bokeh = Array.from({ length: st.bokeh }, () => {
+          const spr = glowSprite(PIXI, glow, 0xffffff);
+          spr.ang = rand(0, Math.PI * 2);
+          spr.rad = rand(0.25, 1.05);
+          spr.spin = rand(-0.25, 0.25);
+          spr.size = rand(0.9, 2.4);
+          app.stage.addChildAt(spr, 0);
+          return spr;
+        });
+      }
+
+      spawnBokeh();
+      ui.onChange = (_s, key) => {
+        if (key === 'bokeh' || key === 'reset') spawnBokeh();
+      };
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const cx = w * (0.5 + (pointer.x - 0.5) * s.drift);
+        const cy = h * (0.5 + (pointer.y - 0.5) * s.drift);
+        const reach = Math.min(w, h) * 0.42;
+        const breath = 1 + s.breath * Math.sin(t * 2.15);
+        const up = hexHsl(s.upC);
+        const dn = hexHsl(s.dnC);
+        const lotus = hexHsl(s.lotusC);
+        const wash = hexHsl(s.wash);
+
+        const trip = 0.5 + 0.5 * Math.sin(t * 1.25);
+        app.renderer.background.color = hsl(
+          (wash.h + t * 24) % 360,
+          Math.min(100, Math.max(55, wash.s) + 18 * trip),
+          5 + 6 * trip,
+        );
+
+        for (const spr of bokeh) {
+          spr.ang += spr.spin * dt;
+          const rr = reach * spr.rad * (1 + 0.08 * Math.sin(t * 1.4 + spr.ang));
+          spr.position.set(cx + Math.cos(spr.ang) * rr, cy + Math.sin(spr.ang) * rr);
+          spr.tint = hsl((lotus.h + t * s.hue + spr.ang * 40) % 360, 100, 62);
+          spr.scale.set(spr.size * (1.5 + 1.2 * Math.sin(t * 2.4 + spr.ang)));
+          spr.alpha = 0.1 + 0.18 * (0.5 + 0.5 * Math.sin(t + spr.ang * 3));
+        }
+
+        g.clear();
+        g.position.set(cx, cy);
+
+        const rings = [1, 1 / PHI, 1 / (PHI * PHI)];
+        for (let i = 0; i < rings.length; i++) {
+          const rad = reach * rings[i] * 1.12 * breath;
+          const col = hsl((lotus.h + t * s.hue + i * 40) % 360, lotus.s, lotus.l);
+          for (const [width, alpha] of GLOW_PASSES) {
+            g.circle(0, 0, rad).stroke({
+              width: width * 0.14 * s.thick,
+              color: col,
+              alpha: alpha * 0.45,
+            });
+          }
+        }
+
+        const nPetal = s.petals;
+        const meltA = s.melt * 0.08;
+        for (let i = 0; i < nPetal; i++) {
+          const a0 = (i / nPetal) * Math.PI * 2 + t * s.spin * 0.45;
+          const a1 = ((i + 1) / nPetal) * Math.PI * 2 + t * s.spin * 0.45;
+          const pts = petalPts(reach * 0.7 * breath, reach * (1.08 + s.melt * 0.08) * breath, a0, a1, 10);
+          const col = hsl((lotus.h + t * s.hue + i * (360 / nPetal)) % 360, 100, 62);
+          glowLine(g, pts, col, 0.7 * s.thick);
+          g.poly(pts).fill({ color: col, alpha: 0.07 + 0.09 * (0.5 + 0.5 * Math.sin(t * 3.1 + i)) });
+          if (s.melt > 0.05) {
+            const ghost = petalPts(reach * 0.7 * breath, reach * 1.12 * breath, a0 + meltA, a1 + meltA, 8);
+            glowLine(g, ghost, hsl((lotus.h + 120 + t * s.hue + i * 20) % 360, 100, 58), 0.4 * s.thick);
+          }
+        }
+
+        const n = s.tris;
+        for (let i = 0; i < n; i++) {
+          const upFace = i % 2 === 0;
+          const hs = upFace ? up : dn;
+          const r = reach * (0.82 - (i % 5) * 0.07) * breath;
+          const rot = (upFace ? -Math.PI / 2 : Math.PI / 2) + t * s.spin * (upFace ? 1 : -1) + (i * Math.PI * 2) / n;
+          const pts = triPts(r, rot);
+          const col = hsl((hs.h + t * s.hue + i * 18) % 360, Math.min(100, hs.s + 18), hs.l);
+          g.poly(pts).fill({
+            color: col,
+            alpha: 0.08 + 0.1 * (0.5 + 0.5 * Math.sin(t * 2.2 + i * 0.7)),
+          });
+          glowLine(g, pts, col, s.thick * (0.9 + 0.25 * Math.sin(t + i)));
+          if (s.melt > 0.05) {
+            const ghost = triPts(r * (1 + s.melt * 0.06), rot + s.melt * 0.12 * (upFace ? 1 : -1));
+            glowLine(g, ghost, hsl((hs.h + 140 + t * s.hue) % 360, 100, 58), s.thick * 0.45);
+          }
+        }
+
+        const beat = Math.pow(0.5 + 0.5 * Math.sin(t * 3.4), 1.2);
+        bindu.position.set(cx, cy);
+        bindu.tint = hsl((hexHsl(s.coreC).h + t * s.hue * 0.6) % 360, 80, 82);
+        bindu.scale.set(2.4 + 8.5 * beat);
+        bindu.alpha = 0.42 + 0.55 * beat;
+      });
+    }, { background: 0x1a0010 });
+  </script>
+</body>
+</html>

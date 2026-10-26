@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flower — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, pointer, hsl, glowSprite, rand, GLOW_PASSES,
+    } from '../shared/boot.js';
+    import { mountSettings, hexHsl } from '../shared/settings.js';
+
+    // Flower of Life: hex-packed circles that breathe and chromatic-shift.
+    const SQRT3 = Math.sqrt(3);
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Flower',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'rings', label: 'Rings', min: 1, max: 3, step: 1, def: 2, int: true },
+            { key: 'spin', label: 'Spin', min: 0, max: 0.8, step: 0.01, def: 0.18 },
+            { key: 'breath', label: 'Breath', min: 0, max: 0.35, step: 0.01, def: 0.16 },
+            { key: 'wave', label: 'Bloom wave', min: 0, max: 4, step: 0.05, def: 2.3 },
+            { key: 'thick', label: 'Line thick', min: 0.3, max: 2.4, step: 0.05, def: 1.2 },
+            { key: 'hue', label: 'Hue crawl', min: 0, max: 120, step: 1, def: 55, int: true },
+            { key: 'melt', label: 'Melt', min: 0, max: 1, step: 0.02, def: 0.75 },
+            { key: 'bokeh', label: 'Bokeh', min: 0, max: 28, step: 1, def: 18, int: true },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'lineC', label: 'Lines', type: 'color', def: '#7c3aed' },
+            { key: 'fillC', label: 'Fill', type: 'color', def: '#22d3ee' },
+            { key: 'coreC', label: 'Seed', type: 'color', def: '#fde68a' },
+            { key: 'wash', label: 'Wash', type: 'color', def: '#0b0018' },
+          ],
+        },
+        {
+          id: 'pointer',
+          label: 'Pointer',
+          fields: [
+            { key: 'drift', label: 'Follow', min: 0, max: 0.2, step: 0.01, def: 0.07 },
+          ],
+        },
+      ],
+    });
+
+    function hexCenters(rings, R) {
+      const pts = [{ x: 0, y: 0, ring: 0 }];
+      const dirs = [
+        [-0.5, SQRT3 / 2],
+        [-1, 0],
+        [-0.5, -SQRT3 / 2],
+        [0.5, -SQRT3 / 2],
+        [1, 0],
+        [0.5, SQRT3 / 2],
+      ];
+      for (let k = 1; k <= rings; k++) {
+        let x0 = R * k;
+        let y0 = 0;
+        for (let d = 0; d < 6; d++) {
+          for (let i = 0; i < k; i++) {
+            pts.push({ x: x0, y: y0, ring: k });
+            x0 += dirs[d][0] * R;
+            y0 += dirs[d][1] * R;
+          }
+        }
+      }
+      return pts;
+    }
+
+    boot((app, PIXI, glow) => {
+      let bokeh = [];
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+
+      const seed = glowSprite(PIXI, glow, 0xfde68a);
+      app.stage.addChild(seed);
+
+      function spawnBokeh() {
+        const st = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        for (const spr of bokeh) spr.destroy();
+        bokeh = Array.from({ length: st.bokeh }, (_, i) => {
+          const spr = glowSprite(PIXI, glow, 0xffffff);
+          spr.x = rand(0, w);
+          spr.y = rand(0, h);
+          spr.scale.set(rand(4, 10));
+          spr.ph = rand(0, Math.PI * 2);
+          spr.vx = rand(-18, 18);
+          spr.vy = rand(-10, 10);
+          app.stage.addChildAt(spr, 0);
+          return spr;
+        });
+      }
+
+      spawnBokeh();
+      ui.onChange = (_s, key) => {
+        if (key === 'bokeh' || key === 'reset') spawnBokeh();
+      };
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const cx = w * (0.5 + (pointer.x - 0.5) * s.drift);
+        const cy = h * (0.5 + (pointer.y - 0.5) * s.drift);
+        const R = Math.min(w, h) * 0.118;
+        const line = hexHsl(s.lineC);
+        const fill = hexHsl(s.fillC);
+        const wash = hexHsl(s.wash);
+        const centers = hexCenters(s.rings, R);
+
+        const trip = 0.5 + 0.5 * Math.sin(t * 1.15);
+        app.renderer.background.color = hsl(
+          (wash.h + t * 22) % 360,
+          Math.min(100, Math.max(55, wash.s) + 15 * trip),
+          5 + 6 * trip,
+        );
+
+        for (const spr of bokeh) {
+          spr.x += spr.vx * dt;
+          spr.y += spr.vy * dt;
+          if (spr.x < -80) spr.x += w + 160;
+          if (spr.x > w + 80) spr.x -= w + 160;
+          if (spr.y < -80) spr.y += h + 160;
+          if (spr.y > h + 80) spr.y -= h + 160;
+          spr.tint = hsl((line.h + t * s.hue + spr.ph * 40) % 360, 100, 62);
+          spr.alpha = 0.08 + 0.16 * (0.5 + 0.5 * Math.sin(t * 1.6 + spr.ph));
+        }
+
+        const rot = t * s.spin;
+        const cr = Math.cos(rot);
+        const sr = Math.sin(rot);
+
+        g.clear();
+        g.position.set(cx, cy);
+        const split = s.melt * R * 0.16;
+        for (const c of centers) {
+          const rx = c.x * cr - c.y * sr;
+          const ry = c.x * sr + c.y * cr;
+          const pulse = 1 + s.breath * Math.sin(t * 2.8 + c.ring * 1.1);
+          const bloom = 0.5 + 0.5 * Math.sin(t * s.wave - c.ring * 1.4 + Math.hypot(c.x, c.y) * 0.01);
+          const rad = R * pulse;
+          const hue = (line.h + t * s.hue + c.ring * 38 + Math.atan2(ry, rx) * 40) % 360;
+          const col = hsl(hue, Math.min(100, line.s + 20), line.l);
+          const fcol = hsl((fill.h + t * s.hue * 0.8 + c.ring * 22) % 360, Math.min(100, fill.s + 15), fill.l);
+          g.circle(rx, ry, rad).fill({ color: fcol, alpha: 0.07 + bloom * 0.14 });
+          for (const [width, alpha] of GLOW_PASSES) {
+            g.circle(rx, ry, rad).stroke({
+              width: width * 0.2 * s.thick,
+              color: col,
+              alpha: alpha * (0.45 + bloom * 0.85),
+            });
+          }
+          if (split > 0.5) {
+            g.circle(rx + split, ry, rad).stroke({
+              width: 2.2 * s.thick,
+              color: hsl((hue + 120) % 360, 100, 58),
+              alpha: 0.28 + s.melt * 0.25,
+            });
+            g.circle(rx - split, ry, rad).stroke({
+              width: 2.2 * s.thick,
+              color: hsl((hue + 240) % 360, 100, 58),
+              alpha: 0.28 + s.melt * 0.25,
+            });
+          }
+        }
+
+        const beat = Math.pow(0.5 + 0.5 * Math.sin(t * 3.1), 1.35);
+        seed.position.set(cx, cy);
+        seed.tint = hsl((hexHsl(s.coreC).h + t * s.hue * 0.4) % 360, 80, 78);
+        seed.scale.set(3.2 + 8.5 * beat);
+        seed.alpha = 0.4 + 0.55 * beat;
+      });
+    }, { background: 0x0b0018 });
+  </script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Merkaba — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, pointer, hsl, glowSprite, glowLine, rand,
+    } from '../shared/boot.js';
+    import { mountSettings, hexHsl } from '../shared/settings.js';
+
+    // Star tetrahedron: two tetrahedra counter-spin in perspective.
+    const TET = [
+      [1, 1, 1],
+      [1, -1, -1],
+      [-1, 1, -1],
+      [-1, -1, 1],
+    ];
+    const EDGES = [
+      [0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3],
+    ];
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Merkaba',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'spin', label: 'Spin', min: 0.1, max: 2.5, step: 0.05, def: 0.9 },
+            { key: 'tilt', label: 'Tilt', min: 0, max: 1.2, step: 0.02, def: 0.7 },
+            { key: 'size', label: 'Size', min: 0.12, max: 0.42, step: 0.01, def: 0.28 },
+            { key: 'thick', label: 'Edge thick', min: 0.4, max: 2.4, step: 0.05, def: 1.4 },
+            { key: 'sparks', label: 'Edge sparks', min: 0, max: 48, step: 1, def: 36, int: true },
+            { key: 'rings', label: 'Halo rings', min: 0, max: 10, step: 1, def: 7, int: true },
+            { key: 'hue', label: 'Hue crawl', min: 0, max: 120, step: 1, def: 48, int: true },
+            { key: 'melt', label: 'Melt', min: 0, max: 1, step: 0.02, def: 0.75 },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'upC', label: 'Up tetra', type: 'color', def: '#22d3ee' },
+            { key: 'dnC', label: 'Down tetra', type: 'color', def: '#f43f5e' },
+            { key: 'coreC', label: 'Core', type: 'color', def: '#fff7cc' },
+            { key: 'wash', label: 'Wash', type: 'color', def: '#100018' },
+          ],
+        },
+        {
+          id: 'pointer',
+          label: 'Pointer',
+          fields: [
+            { key: 'drift', label: 'Follow', min: 0, max: 0.18, step: 0.01, def: 0.05 },
+          ],
+        },
+      ],
+    });
+
+    function rot(p, ax, ay, az) {
+      let [x, y, z] = p;
+      let c = Math.cos(ax);
+      let s = Math.sin(ax);
+      let y1 = y * c - z * s;
+      let z1 = y * s + z * c;
+      y = y1;
+      z = z1;
+      c = Math.cos(ay);
+      s = Math.sin(ay);
+      const x1 = x * c + z * s;
+      z1 = -x * s + z * c;
+      x = x1;
+      z = z1;
+      c = Math.cos(az);
+      s = Math.sin(az);
+      const x2 = x * c - y * s;
+      const y2 = x * s + y * c;
+      return [x2, y2, z];
+    }
+
+    boot((app, PIXI, glow) => {
+      let sparks = [];
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+
+      const verts = [];
+      for (let i = 0; i < 8; i++) {
+        const spr = glowSprite(PIXI, glow, 0xffffff);
+        app.stage.addChild(spr);
+        verts.push(spr);
+      }
+
+      const core = glowSprite(PIXI, glow, 0xfff7cc);
+      app.stage.addChild(core);
+
+      function spawnSparks() {
+        const st = ui.state;
+        for (const spr of sparks) spr.destroy();
+        sparks = Array.from({ length: st.sparks }, () => {
+          const spr = glowSprite(PIXI, glow, 0xffffff);
+          spr.u = rand(0, 1);
+          spr.e = Math.floor(rand(0, 12));
+          spr.spd = rand(0.15, 0.45);
+          spr.size = rand(0.12, 0.32);
+          app.stage.addChild(spr);
+          return spr;
+        });
+      }
+
+      spawnSparks();
+      ui.onChange = (_s, key) => {
+        if (key === 'sparks' || key === 'reset') spawnSparks();
+      };
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const cx = w * (0.5 + (pointer.x - 0.5) * s.drift);
+        const cy = h * (0.5 + (pointer.y - 0.5) * s.drift);
+        const scale = Math.min(w, h) * s.size * (1 + 0.08 * Math.sin(t * 3.2));
+        const up = hexHsl(s.upC);
+        const dn = hexHsl(s.dnC);
+        const wash = hexHsl(s.wash);
+        const ax = s.tilt * 0.7 + 0.12 * Math.sin(t * 1.7);
+        const ay = t * s.spin;
+        const az = t * s.spin * 0.37;
+
+        const trip = 0.5 + 0.5 * Math.sin(t * 1.3);
+        app.renderer.background.color = hsl(
+          (wash.h + t * 20) % 360,
+          Math.min(100, Math.max(55, wash.s) + 12 * trip),
+          5 + 5 * trip,
+        );
+
+        const proj = (p) => {
+          const z = p[2];
+          const persp = 2.4 / (2.4 + z * 0.55);
+          return [p[0] * persp * scale, p[1] * persp * scale, z, persp];
+        };
+
+        const A = TET.map((v) => proj(rot(v, ax, ay, az)));
+        const B = TET.map((v) => proj(rot(v.map((n) => -n), ax, -ay * 1.07, az * 0.6)));
+        const solids = [A, B];
+        const hues = [up, dn];
+
+        g.clear();
+        g.position.set(cx, cy);
+
+        for (let r = 0; r < s.rings; r++) {
+          const u = ((r / Math.max(1, s.rings)) + t * 0.08) % 1;
+          const rad = scale * (0.55 + u * 2.1);
+          const col = hsl((up.h + t * s.hue + u * 80) % 360, 90, 55);
+          const life = Math.pow(1 - u, 1.2);
+          g.circle(0, 0, rad).stroke({
+            width: 10 * (1 - u * 0.5),
+            color: col,
+            alpha: 0.05 * life,
+          });
+          g.circle(0, 0, rad).stroke({
+            width: 1.6,
+            color: col,
+            alpha: 0.4 * life,
+          });
+        }
+
+        const faces = [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]];
+        for (let k = 0; k < 2; k++) {
+          const P = solids[k];
+          const hs = hues[k];
+          for (const f of faces) {
+            const pts = [P[f[0]][0], P[f[0]][1], P[f[1]][0], P[f[1]][1], P[f[2]][0], P[f[2]][1]];
+            const col = hsl((hs.h + t * s.hue * 0.8 + k * 80) % 360, Math.min(100, hs.s + 15), hs.l);
+            g.poly(pts).fill({ color: col, alpha: 0.08 + 0.08 * Math.sin(t * 2.4 + k + f[0]) });
+          }
+        }
+
+        for (let k = 0; k < 2; k++) {
+          const P = solids[k];
+          const hs = hues[k];
+          for (const [a, b] of EDGES) {
+            const pa = P[a];
+            const pb = P[b];
+            const col = hsl((hs.h + t * s.hue + (pa[2] + pb[2]) * 20) % 360, Math.min(100, hs.s + 10), hs.l);
+            const thick = s.thick * (0.75 + 0.4 * (pa[3] + pb[3]));
+            glowLine(g, [pa[0], pa[1], pb[0], pb[1]], col, thick);
+            if (s.melt > 0.05) {
+              const m = s.melt * 10;
+              g.moveTo(pa[0] + m, pa[1]);
+              g.lineTo(pb[0] + m, pb[1]);
+              g.stroke({ width: 2.4, color: hsl((hs.h + 120 + t * s.hue) % 360, 100, 58), alpha: 0.45 + s.melt * 0.2 });
+              g.moveTo(pa[0] - m, pa[1]);
+              g.lineTo(pb[0] - m, pb[1]);
+              g.stroke({ width: 2.4, color: hsl((hs.h + 240 + t * s.hue) % 360, 100, 58), alpha: 0.45 + s.melt * 0.2 });
+            }
+          }
+        }
+
+        for (let i = 0; i < 8; i++) {
+          const P = i < 4 ? A[i] : B[i - 4];
+          const hs = i < 4 ? up : dn;
+          const spr = verts[i];
+          spr.position.set(cx + P[0], cy + P[1]);
+          spr.tint = hsl((hs.h + t * s.hue) % 360, 90, 70);
+          spr.scale.set(0.5 + 0.85 * P[3]);
+          spr.alpha = 0.6 + 0.4 * P[3];
+        }
+
+        for (const spr of sparks) {
+          spr.u += dt * spr.spd;
+          if (spr.u > 1) {
+            spr.u -= 1;
+            spr.e = (spr.e + 1) % 12;
+          }
+          const k = spr.e < 6 ? 0 : 1;
+          const P = solids[k];
+          const [a, b] = EDGES[spr.e % 6];
+          const pa = P[a];
+          const pb = P[b];
+          const u = spr.u;
+          spr.position.set(cx + pa[0] + (pb[0] - pa[0]) * u, cy + pa[1] + (pb[1] - pa[1]) * u);
+          const hs = k ? dn : up;
+          spr.tint = hsl((hs.h + t * 40) % 360, 95, 62);
+          spr.scale.set(spr.size * (1.1 + 0.9 * Math.sin(t * 8 + spr.u * 8)));
+          spr.alpha = 0.45 + 0.5 * Math.sin(spr.u * Math.PI);
+        }
+
+        const beat = Math.pow(0.5 + 0.5 * Math.sin(t * 3.0), 1.25);
+        core.position.set(cx, cy);
+        core.tint = hsl((hexHsl(s.coreC).h + t * s.hue * 0.5) % 360, 75, 80);
+        core.scale.set(3.0 + 7.2 * beat);
+        core.alpha = 0.38 + 0.55 * beat;
+      });
+    }, { background: 0x100018 });
+  </script>
+</body>
+</html>

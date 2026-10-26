@@ -28,6 +28,9 @@ Current scenes:
 - `bgs/vortex.html` — concentric tunnel, sparks spiral in
 - `bgs/sunbleed.html` — orbiting corona on a heat canvas
 - `bgs/voronoi.html` — drifting neon Voronoi walls (pointer repel)
+- `bgs/flower.html` — Flower of Life, hex-packed circles that breathe
+- `bgs/merkaba.html` — star tetrahedron, counter-spin in perspective
+- `bgs/yantra.html` — interlocking triangles, lotus ring, bindu pulse
 
 ## Add a background
 1. New file `bgs/<name>.html` — `import { boot, glowSprite, glowLine, wrap } from '../shared/boot.js'` and `import { mountSettings } from '../shared/settings.js'`. Link `../shared/settings.css`.
