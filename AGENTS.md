@@ -8,6 +8,14 @@ code can be shared between animations.
 Look of the Stupid Audio catalog (`audio.stupid.systems/fx.js`): additive glow sprites, multi-pass bloom lines, flow fields — not flat dots.
 Canvas fill is not required to be black; scenes may wash/hue the renderer background.
 
+## Terminology
+| Term | Meaning |
+|------|---------|
+| **Clanker** / **Clankers** | Any AI assistant, agent, or automated editor |
+| **Meat Bag** / **Meat Bags** | Human operators, contributors, and dev-workflow users |
+
+Use **Clanker** / **Meat Bag** in this file, in new comments where natural, and in chat. Do not call Clankers "AI", "the assistant", or "LLM". Do not rewrite existing comments or docs solely to swap terminology.
+
 ## Layout
 - `index.html` — landing list of backgrounds
 - `bgs/*.html` — one fullscreen scene per file
@@ -40,4 +48,8 @@ Current scenes:
 5. Add one link on `index.html`.
 
 ## Testing
-Meat Bag runs server on `localhost:8000` for testing and verification, if not running, remind Meat Bag to start it.
+Default: Meat Bag hosts `http://localhost:8000`. If it is not up, remind Meat Bag. Clanker does not start a server unasked.
+
+When Meat Bag says **show me**, Clanker hosts: start a static server from the repo root (`python -m http.server 8000`, or the next free port if 8000 is taken). Reply with a clickable markdown link to the scene (e.g. [http://localhost:8000/bgs/starfield.html](http://localhost:8000/bgs/starfield.html)), plus [http://localhost:8000/](http://localhost:8000/) when the catalog matters. Do not only say it is running.
+
+Clanker-hosted servers are short-lived. Kill the process when the look is over, when the conversation moves off preview, or when it sits unused — do not leave it for the rest of the session. Meat Bag says **hide it** to stop it now; confirm it is down. Do not kill a server Meat Bag started.
