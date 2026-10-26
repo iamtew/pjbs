@@ -24,11 +24,12 @@ Use **Clanker** / **Meat Bag** in this file, in new comments where natural, and 
 - `shared/style.css` — fullscreen canvas reset
 - `shared/settings.js` + `shared/settings.css` — Control UI shell (`mountSettings`). URL query is the complete config. Panel starts **closed**; `menu=ON` shows it. Double-click reopens. `side=left` (omit when `right`). Copy URL for OBS rebuilds the query without `menu=ON`. Live `input` → scene + `replaceState` (omit defaults). Color fields use Iro (`type: 'color'` / `'palette'`). `type: 'choice'` is a native select, or URL-only when `skipUi`. Canvas stays opaque (these are backgrounds, not overlays). Header/reset/copy use Tabler outline icons.
 - `shared/icons/` — vendored Tabler outline SVGs (MIT). Keep `shared/icons/LICENSE`.
+- `shared/fonts/` — vendored Better VCR (OFL 1.1). Keep `shared/fonts/LICENSE`.
 
 No bundler.
 
 ## License
-Original work is Unlicense (`UNLICENSE`). Do not relicense `shared/icons/`. New vendored third-party keeps its own license file in-tree. CDN deps are not in this repo and keep their licenses.
+Original work is Unlicense (`UNLICENSE`). Do not relicense `shared/icons/` or `shared/fonts/`. New vendored third-party keeps its own license file in-tree. CDN deps are not in this repo and keep their licenses.
 
 ## Backgrounds
 Must loop or run forever (OBS browser sources). No finite timelines, no hard cuts.

@@ -6,6 +6,8 @@ Fullscreen looping PixiJS scenes for OBS browser sources. Catalog is `index.html
 
 Original work in this repo is dedicated to the public domain under the [Unlicense](UNLICENSE).
 
-Vendored exception: [`shared/icons/`](shared/icons/) are Tabler outline SVGs and stay [MIT](shared/icons/LICENSE).
+Vendored exceptions:
+- [`shared/icons/`](shared/icons/) are Tabler outline SVGs and stay [MIT](shared/icons/LICENSE).
+- [`shared/fonts/`](shared/fonts/) is Better VCR and stays [OFL 1.1](shared/fonts/LICENSE).
 
-Runtime CDN loads (PixiJS, iro.js, Better VCR) keep their own licenses and are not part of this dedication.
+Runtime CDN loads (PixiJS, iro.js) keep their own licenses and are not part of this dedication.

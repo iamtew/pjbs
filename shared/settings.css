@@ -1,4 +1,9 @@
-@import url('https://fonts.cdnfonts.com/css/better-vcr');
+@font-face {
+  font-family: 'Better VCR';
+  font-style: normal;
+  font-weight: 400;
+  src: url('./fonts/better-vcr.woff') format('woff');
+}
 
 :root {
   --settings-bg: rgba(10, 10, 20, 0.95);
