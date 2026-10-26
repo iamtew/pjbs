@@ -17,7 +17,7 @@ Canvas fill is not required to be black; scenes may wash/hue the renderer backgr
 Use **Clanker** / **Meat Bag** in this file, in new comments where natural, and in chat. Do not call Clankers "AI", "the assistant", or "LLM". Do not rewrite existing comments or docs solely to swap terminology.
 
 ## Layout
-- `index.html` — grouped chip catalog + isometric cube canvas. Palette chips set `pal`; gear opens `mountSettings`. Groups: Drift, Wash, Orbit, Lattice.
+- `index.html` + `index.css` + `index.js` — grouped chip catalog + isometric cube canvas. Palette chips set `pal`; gear opens `mountSettings`. Groups: Drift, Wash, Orbit, Lattice.
 - `bgs/*.html` — one fullscreen scene per file
 - `shared/iso.js` — named `PALS` plus `layoutCells` / `paintCubes` for the catalog canvas and `bgs/cubes.html`
 - `shared/boot.js` — PixiJS v8.22.0 from jsDelivr (`pixi.min.mjs`), plus `glowTexture` / `glowSprite` / `glowLine` / `wrap` / `pointer` / `hsl`. `boot(setup, { background })` for a non-black start color.

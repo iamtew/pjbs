@@ -1,0 +1,132 @@
+html, body {
+  margin: 0;
+  background: #050508;
+  color: #e8e8ef;
+  font: 16px/1.5 var(--font-body);
+  min-height: 100%;
+}
+/* Canvas is fixed behind; this keeps copy readable. */
+main {
+  position: relative;
+  z-index: 2;
+  max-width: 32rem;
+  margin: 3rem auto;
+  padding: 1.25rem 1.5rem 1.5rem;
+  background: rgba(0, 0, 0, 0.72);
+  clip-path: polygon(
+    12px 0,
+    calc(100% - 12px) 0,
+    100% 12px,
+    100% calc(100% - 12px),
+    calc(100% - 12px) 100%,
+    12px 100%,
+    0 calc(100% - 12px),
+    0 12px
+  );
+}
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+.pals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.pals button {
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+}
+.pals button[aria-pressed="true"] {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px #111, 0 0 0 4px #fff;
+}
+.gear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #e8e8ef;
+  cursor: pointer;
+}
+.gear .ti {
+  width: 1.45rem;
+  height: 1.45rem;
+}
+h1 { font-weight: 600; letter-spacing: 0.04em; margin: 0; }
+.aka { color: #e8e8ef; margin: 0.25rem 0 1rem; letter-spacing: 0.02em; }
+p { color: #9a9aa8; }
+a { color: #c4b5fd; }
+.catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.catalog h2 {
+  margin: 0 0 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9a9aa8;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.48rem 1.05rem;
+  border: 0;
+  border-radius: 0;
+  /* One gradient sliced across chips; --i / --n set in the landing script. */
+  background-image: linear-gradient(
+    90deg,
+    #c026d3,
+    #fb7185,
+    #f97316,
+    #facc15,
+    #84cc16,
+    #22d3ee,
+    #2dd4bf
+  );
+  background-size: calc(var(--n) * 100%) 100%;
+  /* i/(n-1) so the last chip is the teal end, not a tiled magenta wrap. */
+  background-position: calc(var(--i) * 100% / (var(--n) - 1)) 0;
+  background-repeat: no-repeat;
+  color: #fff;
+  text-decoration: none;
+  font-size: 1.02rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+.chip:hover,
+.chip:focus-visible {
+  filter: brightness(1.22);
+}
+.repo {
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+}
+.repo a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.repo .ti {
+  width: 1.15rem;
+  height: 1.15rem;
+}
