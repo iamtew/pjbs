@@ -11,6 +11,7 @@ export const PALS = {
   royal: { h0: 252, span: 28, sat: 68 },
   crimson: { h0: 348, span: 20, sat: 82 },
   foam: { h0: 162, span: 24, sat: 48 },
+  chrome: { h0: 208, span: 14, sat: 14, lift: 10 },
 };
 
 export function layoutCells(size, w, h) {
@@ -57,8 +58,9 @@ export function paintCubes(g, cells, t, st, hsl, w, h) {
     const dy = s / 2;
     const wave = (Math.sin(cell.col * 0.35 + cell.row * 0.22 - t * st.wave) + 1) * 0.5;
     const phase = t * 0.8 * st.speed + cell.col * 0.4 + cell.row * 0.25;
-    const topL = 42 + 20 * wave;
-    const leftL = 26 + 14 * (0.5 + 0.5 * Math.sin(phase + 2.1));
+    const lift = pal.lift || 0;
+    const topL = 42 + 20 * wave + lift;
+    const leftL = 26 + 14 * (0.5 + 0.5 * Math.sin(phase + 2.1)) + lift * 0.4;
     const rightL = 14 + 12 * (0.5 + 0.5 * Math.sin(phase + 4.2));
     const walk = t * st.hue + cell.col * 2.5 + cell.row * 1.5;
     const hCell = pal.h0 + ((walk % pal.span) + pal.span) % pal.span;
