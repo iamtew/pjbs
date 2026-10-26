@@ -201,6 +201,17 @@
   accent-color: var(--accent);
 }
 
+.choice-select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.28rem 0.4rem;
+  border: 1px solid var(--settings-border);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--settings-text);
+  font: inherit;
+}
+
 .range-meta {
   display: flex;
   flex-direction: column;

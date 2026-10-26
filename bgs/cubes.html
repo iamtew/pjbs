@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cubes — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import { boot, hsl } from '../shared/boot.js';
+    import { mountSettings } from '../shared/settings.js';
+    import { PALS, layoutCells, paintCubes } from '../shared/iso.js';
+
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Cubes',
+      sections: [
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'size', label: 'Cell size', min: 12, max: 40, step: 1, def: 21, int: true },
+            { key: 'swell', label: 'Swell', min: 0, max: 1.5, step: 0.05, def: 1, fmt: x },
+            { key: 'speed', label: 'Pulse', min: 0.2, max: 4, step: 0.05, def: 1, fmt: x },
+            { key: 'hue', label: 'Hue crawl', min: 0, max: 40, step: 1, def: 14, int: true },
+            { key: 'wave', label: 'Light wave', min: 0.2, max: 3, step: 0.05, def: 1.15 },
+            {
+              key: 'pal',
+              label: 'Palette',
+              type: 'choice',
+              options: Object.keys(PALS),
+              def: 'prism',
+            },
+          ],
+        },
+      ],
+    });
+
+    let cells = [];
+    function layout(w, h) {
+      cells = layoutCells(ui.state.size, w, h);
+    }
+
+    ui.onChange = (_state, key) => {
+      if (key === 'size' || key === 'reset') layout(window.innerWidth, window.innerHeight);
+    };
+
+    boot((app, PIXI) => {
+      const g = new PIXI.Graphics();
+      app.stage.addChild(g);
+
+      layout(app.screen.width, app.screen.height);
+      app.renderer.on('resize', () => layout(app.screen.width, app.screen.height));
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        t += dt;
+        paintCubes(g, cells, t, ui.state, hsl, app.screen.width, app.screen.height);
+      });
+    }, { background: 0x050508 });
+  </script>
+</body>
+</html>

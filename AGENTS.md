@@ -19,9 +19,10 @@ Use **Clanker** / **Meat Bag** in this file, in new comments where natural, and 
 ## Layout
 - `index.html` — grouped chip catalog + isometric cube canvas. Palette chips set `pal`; gear opens `mountSettings`. Groups: Drift, Wash, Orbit, Lattice.
 - `bgs/*.html` — one fullscreen scene per file
+- `shared/iso.js` — named `PALS` plus `layoutCells` / `paintCubes` for the catalog canvas and `bgs/cubes.html`
 - `shared/boot.js` — PixiJS v8.22.0 from jsDelivr (`pixi.min.mjs`), plus `glowTexture` / `glowSprite` / `glowLine` / `wrap` / `pointer` / `hsl`. `boot(setup, { background })` for a non-black start color.
 - `shared/style.css` — fullscreen canvas reset
-- `shared/settings.js` + `shared/settings.css` — Control UI shell (`mountSettings`). URL query is the complete config. Panel starts **closed**; `menu=ON` shows it. Double-click reopens. `side=left` (omit when `right`). Copy URL for OBS rebuilds the query without `menu=ON`. Live `input` → scene + `replaceState` (omit defaults). Color fields use Iro (`type: 'color'` / `'palette'`). Hidden `type: 'choice'` is URL-only. Canvas stays opaque (these are backgrounds, not overlays). Header/reset/copy use Tabler outline icons.
+- `shared/settings.js` + `shared/settings.css` — Control UI shell (`mountSettings`). URL query is the complete config. Panel starts **closed**; `menu=ON` shows it. Double-click reopens. `side=left` (omit when `right`). Copy URL for OBS rebuilds the query without `menu=ON`. Live `input` → scene + `replaceState` (omit defaults). Color fields use Iro (`type: 'color'` / `'palette'`). `type: 'choice'` is a native select, or URL-only when `skipUi`. Canvas stays opaque (these are backgrounds, not overlays). Header/reset/copy use Tabler outline icons.
 - `shared/icons/` — vendored Tabler outline SVGs (MIT). Keep `shared/icons/LICENSE`.
 
 No bundler.
@@ -36,7 +37,7 @@ Current scenes:
 - Drift: `starfield` (flow-field streaks + bokeh), `rainveil` (vertical rain + floor splash), `ember` (rising sparks, heat wash), `flock` (boid glow sprites)
 - Wash: `aurora` (ribbons in fog), `sunbleed` (orbiting corona), `caustic` (wobbling light pools), `lichten` (branching discharge)
 - Orbit: `vortex` (tunnel + sparks), `kaleido` (n-fold mandala), `radar` (sweep + pings), `lissajous` (harmonic trails), `torus` (glow beads), `merkaba` (star tetrahedron)
-- Lattice: `hexpulse` (honeycomb wave), `voronoi` (neon cell walls), `circuit` (orthogonal traces + packets), `warp` (perspective grid), `flower` (Flower of Life), `yantra` (triangles, lotus, bindu)
+- Lattice: `hexpulse` (honeycomb wave), `voronoi` (neon cell walls), `circuit` (orthogonal traces + packets), `warp` (perspective grid), `flower` (Flower of Life), `yantra` (triangles, lotus, bindu), `cubes` (isometric cube field)
 
 ## Add a background
 1. New file `bgs/<name>.html` — `import { boot, glowSprite, glowLine, wrap } from '../shared/boot.js'` and `import { mountSettings } from '../shared/settings.js'`. Link `../shared/settings.css`.

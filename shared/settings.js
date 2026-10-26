@@ -183,6 +183,7 @@ export function mountSettings({ title, sections, onChange }) {
 
   const toggles = [];
   const ranges = {};
+  const choices = {};
   const colorUIs = [];
 
   function emit(key) {
@@ -332,6 +333,40 @@ export function mountSettings({ title, sections, onChange }) {
         panel.appendChild(colorBlock(field));
         continue;
       }
+      if (field.type === 'choice') {
+        const id = `${field.key}-choice`;
+        const select = el('select', { id, class: 'choice-select' });
+        for (const opt of field.options) {
+          select.appendChild(el('option', { value: opt, text: opt }));
+        }
+        const reset = el('button', {
+          type: 'button',
+          class: 'reset-param',
+          'data-reset': field.key,
+          'aria-label': `Reset ${field.label}`,
+          title: `Reset ${field.label}`,
+        });
+        reset.appendChild(ti('refresh'));
+        panel.appendChild(
+          el(
+            'div',
+            { class: 'setting-group' },
+            el(
+              'div',
+              { class: 'range-control' },
+              el(
+                'div',
+                { class: 'range-details' },
+                el('div', { class: 'range-label-row' }, el('label', { for: id }, el('span', { text: field.label }))),
+                el('div', { class: 'range-row' }, select),
+              ),
+              el('div', { class: 'range-meta' }, reset),
+            ),
+          ),
+        );
+        choices[field.key] = { select, field };
+        continue;
+      }
       const id = `${field.key}-slider`;
       const slider = el('input', {
         id,
@@ -395,6 +430,9 @@ export function mountSettings({ title, sections, onChange }) {
       slider.value = String(state[field.key]);
       readout.textContent = formatRange(field, state[field.key]);
     }
+    for (const { select, field } of Object.values(choices)) {
+      select.value = String(state[field.key]);
+    }
     for (const field of colorUIs) syncColorUI(field);
   }
 
@@ -425,6 +463,9 @@ export function mountSettings({ title, sections, onChange }) {
 
   for (const { slider, field } of Object.values(ranges)) {
     slider.addEventListener('input', (e) => setField(field.key, e.target.value));
+  }
+  for (const { select, field } of Object.values(choices)) {
+    select.addEventListener('change', (e) => setField(field.key, e.target.value));
   }
 
   menu.addEventListener('click', (e) => {
