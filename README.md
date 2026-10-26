@@ -8,6 +8,6 @@ Original work in this repo is dedicated to the public domain under the [Unlicens
 
 Vendored exceptions:
 - [`shared/icons/`](shared/icons/) are Tabler outline SVGs and stay [MIT](shared/icons/LICENSE).
-- [`shared/fonts/`](shared/fonts/) is Better VCR and stays [OFL 1.1](shared/fonts/LICENSE).
+- [`shared/fonts/`](shared/fonts/) is Better VCR ([OFL 1.1](shared/fonts/LICENSE)) and Geist ([OFL 1.1](shared/fonts/geist-LICENSE)).
 
 Runtime CDN loads (PixiJS, iro.js) keep their own licenses and are not part of this dedication.

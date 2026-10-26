@@ -24,7 +24,7 @@ Use **Clanker** / **Meat Bag** in this file, in new comments where natural, and 
 - `shared/style.css` — fullscreen canvas reset
 - `shared/settings.js` + `shared/settings.css` — Control UI shell (`mountSettings`). URL query is the complete config. Panel starts **closed**; `menu=ON` shows it. Double-click reopens. `side=left` (omit when `right`). Copy URL for OBS rebuilds the query without `menu=ON`. Live `input` → scene + `replaceState` (omit defaults). Color fields use Iro (`type: 'color'` / `'palette'`). `type: 'choice'` is a native select, or URL-only when `skipUi`. Canvas stays opaque (these are backgrounds, not overlays). Header/reset/copy use Tabler outline icons.
 - `shared/icons/` — vendored Tabler outline SVGs (MIT). Keep `shared/icons/LICENSE`.
-- `shared/fonts/` — vendored Better VCR (OFL 1.1). Keep `shared/fonts/LICENSE`.
+- `shared/fonts/` — vendored Better VCR + Geist (both OFL 1.1). Keep `shared/fonts/LICENSE` and `shared/fonts/geist-LICENSE`. Body UI uses Geist (`--font-body`); titles stay Better VCR.
 
 No bundler.
 

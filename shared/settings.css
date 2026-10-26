@@ -5,6 +5,14 @@
   src: url('./fonts/better-vcr.woff') format('woff');
 }
 
+@font-face {
+  font-family: Geist;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/geist.woff2') format('woff2');
+}
+
 :root {
   --settings-bg: rgba(10, 10, 20, 0.95);
   --settings-border: rgba(255, 255, 255, 0.15);
@@ -12,6 +20,7 @@
   --accent: #0ff;
   --destructive: #f40;
   --font-vcr: 'Better VCR', monospace;
+  --font-body: Geist, system-ui, sans-serif;
 }
 
 #settings-menu {
@@ -25,7 +34,7 @@
   border: 1px solid var(--settings-border);
   background: var(--settings-bg);
   color: var(--settings-text);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-body);
   font-size: 0.85rem;
   z-index: 19;
   backdrop-filter: blur(14px);
