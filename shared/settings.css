@@ -114,6 +114,10 @@
   margin-bottom: 0.6rem;
 }
 
+.setting-group[hidden] {
+  display: none;
+}
+
 .settings-section {
   margin-bottom: 0.6rem;
 }

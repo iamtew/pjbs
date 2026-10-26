@@ -10,14 +10,52 @@
 <body>
   <script type="module">
     import {
-      boot, hsl, glowLine, glowSprite,
+      boot, hsl, glowLine, glowSprite, glowTexture,
     } from '../shared/boot.js';
     import { mountSettings, hexToPixi, hexHsl } from '../shared/settings.js';
 
     const x = (v) => `${v.toFixed(2)}x`;
+    const pct = (v) => `${Math.round(v * 100)}%`;
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const rgb = (n) => `rgb(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255})`;
+    const hash01 = (i, salt) => {
+      const n = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+      return n - Math.floor(n);
+    };
+    const CLOUD_SHAPES = [
+      ['0001111111000', '0111111111110', '1111111111111', '0011111111100'],
+      ['000011111110000', '001111111111100', '111111111111111', '011111111111110'],
+      ['00111111100', '11111111111', '01111111110'],
+    ];
     const ui = mountSettings({
       title: 'Warp',
       sections: [
+        {
+          id: 'background',
+          label: 'Background',
+          fields: [
+            {
+              key: 'bg',
+              label: 'Scene',
+              type: 'choice',
+              options: ['default', 'sunset', 'night'],
+              def: 'default',
+            },
+            {
+              key: 'grad',
+              label: 'Gradient',
+              type: 'choice',
+              options: ['bands', 'smooth'],
+              def: 'bands',
+            },
+            { key: 'sunX', label: 'Pos X', min: 0, max: 1, step: 0.01, def: 0.5, fmt: pct },
+            { key: 'sunY', label: 'Pos Y', min: 0, max: 1, step: 0.01, def: 0.5, fmt: pct },
+            { key: 'sunSz', label: 'Size', min: 0.06, max: 0.5, step: 0.01, def: 0.22, fmt: pct },
+            { key: 'sunInt', label: 'Intensity', min: 0, max: 2, step: 0.05, def: 0.5, fmt: x },
+            { key: 'sunGlow', label: 'Glow', min: 0, max: 2.5, step: 0.05, def: 0.5, fmt: x },
+            { key: 'cover', label: 'Clouds', min: 0, max: 1, step: 0.05, def: 0.4, fmt: pct },
+          ],
+        },
         {
           id: 'animation',
           label: 'Animation',
@@ -41,12 +79,183 @@
       ],
     });
 
+    const LAND_UI = ['grad-choice', 'sunX-slider', 'sunY-slider', 'sunSz-slider', 'sunInt-slider', 'sunGlow-slider', 'cover-slider'];
+    function syncLandUi() {
+      const hide = ui.state.bg === 'default';
+      for (const id of LAND_UI) {
+        const row = document.getElementById(id)?.closest('.setting-group');
+        if (!row) continue;
+        row.hidden = hide;
+        row.style.display = hide ? 'none' : '';
+      }
+      const lab = document.querySelector('label[for="cover-slider"] span');
+      if (lab) lab.textContent = ui.state.bg === 'night' ? 'Stars' : 'Clouds';
+    }
+    ui.onChange = (_state, key) => {
+      if (key === 'bg' || key === 'reset') syncLandUi();
+    };
+    syncLandUi();
+
+    function skySunset(u, ceilH) {
+      if (u < 0.5) {
+        const t = u / 0.5;
+        return hsl(lerp(ceilH, 318, t), lerp(50, 76, t), lerp(7, 22, t));
+      }
+      const t = (u - 0.5) / 0.5;
+      return hsl(lerp(318, 346, t), lerp(76, 82, t), lerp(22, 48, t));
+    }
+
+    function skyNight(u, ceilH) {
+      const hue = ceilH * 0.2 + 222;
+      return hsl(hue, lerp(42, 26, u), lerp(3, 13, u));
+    }
+
+    function groundAt(v, floorH, night) {
+      const hue = night ? floorH * 0.2 + 230 : floorH * 0.35 + 248;
+      return hsl(hue, night ? 38 : 48, lerp(night ? 11 : 16, night ? 4 : 5, v));
+    }
+
+    // Same u*u + rush phase as the warp ribs, so bands zoom with the grid.
+    function paintWarpBands(g, w, n, phase, yFromZ, colorAt) {
+      const zs = [];
+      for (let i = 0; i < n; i++) zs.push((((i / n) + phase) % 1) ** 2);
+      zs.sort((a, b) => a - b);
+      const edges = [0, ...zs, 1];
+      for (let i = 0; i < edges.length - 1; i++) {
+        const z0 = edges[i];
+        const z1 = edges[i + 1];
+        const y0 = yFromZ(z0);
+        const y1 = yFromZ(z1);
+        const top = Math.min(y0, y1);
+        g.rect(0, top, w, Math.max(1, Math.abs(y1 - y0)) + 1).fill({
+          color: colorAt((z0 + z1) / 2),
+        });
+      }
+    }
+
+    function paintCloud(g, x, y, px, shape, color, alpha) {
+      for (let r = 0; r < shape.length; r++) {
+        const row = shape[r];
+        for (let c = 0; c < row.length; c++) {
+          if (row[c] !== '1') continue;
+          g.rect(Math.floor(x + c * px), Math.floor(y + r * px), px, px).fill({ color, alpha });
+        }
+      }
+    }
+
+    function paintSkyBits(g, w, hy, cover, night, t) {
+      if (cover <= 0) return;
+      if (night) {
+        const n = Math.round(cover * 160);
+        for (let i = 0; i < n; i++) {
+          const px = 2 + (hash01(i, 3) > 0.75 ? 1 : 0);
+          const tw = 0.5 + 0.5 * Math.sin(t * (1.8 + hash01(i, 10) * 3.4) + i * 2.1);
+          g.rect(
+            Math.floor(hash01(i, 1) * w),
+            Math.floor(hash01(i, 2) * hy * 0.96),
+            px, px,
+          ).fill({
+            color: 0xfff4dc,
+            alpha: (0.2 + hash01(i, 4) * 0.45) * (0.25 + 0.75 * tw),
+          });
+        }
+        return;
+      }
+      const n = Math.round(cover * 18);
+      for (let i = 0; i < n; i++) {
+        const px = 4 + Math.floor(hash01(i, 5) * 5);
+        const x = hash01(i, 6) * w - px * 6 + Math.sin(t * 0.22 + i) * 36;
+        const y = (0.06 + hash01(i, 7) * 0.62) * hy + Math.sin(t * 0.14 + i * 1.7) * 8;
+        paintCloud(
+          g, x, y, px,
+          CLOUD_SHAPES[i % CLOUD_SHAPES.length],
+          hash01(i, 8) > 0.5 ? 0xffd0ea : 0xffe8f4,
+          0.45 + hash01(i, 9) * 0.3,
+        );
+      }
+    }
+
+    function paintSun(g, sx, sy, R, fill, alpha, colorAt, hy) {
+      g.circle(sx, sy, R).fill({ color: fill, alpha });
+      for (let i = 0; i < 7; i++) {
+        const u = (i + 1) / 8;
+        const y = sy - R + u * 2 * R;
+        const dy = y - sy;
+        if (Math.abs(dy) >= R) continue;
+        const half = Math.sqrt(R * R - dy * dy);
+        const thick = 2 + u * 8;
+        g.rect(sx - half, y - thick / 2, half * 2, thick).fill({
+          color: colorAt(Math.max(0, Math.min(1, y / hy))),
+          alpha,
+        });
+      }
+    }
+
+    function makeGradTex(PIXI, span, colorAt) {
+      const c = document.createElement('canvas');
+      c.width = 4;
+      c.height = Math.max(2, Math.round(span));
+      const ctx = c.getContext('2d');
+      const grd = ctx.createLinearGradient(0, 0, 0, c.height);
+      for (let i = 0; i <= 12; i++) {
+        const u = i / 12;
+        grd.addColorStop(u, rgb(colorAt(u)));
+      }
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, 4, c.height);
+      return PIXI.Texture.from(c);
+    }
+
+    function applyGrad(spr, PIXI, w, y, span, colorAt, bucket) {
+      const ht = Math.max(2, Math.round(span));
+      const key = `${ht}|${rgb(colorAt(0))}|${rgb(colorAt(0.5))}|${rgb(colorAt(1))}`;
+      if (bucket.key !== key) {
+        const tex = makeGradTex(PIXI, ht, colorAt);
+        const old = spr.texture;
+        spr.texture = tex;
+        if (old && old !== PIXI.Texture.EMPTY) old.destroy(true);
+        bucket.key = key;
+      }
+      spr.position.set(0, y);
+      spr.width = w;
+      spr.height = span;
+      spr.visible = true;
+    }
+
     boot((app, PIXI, glow) => {
+      const bloomTex = glowTexture(PIXI, 128);
+      const skySpr = new PIXI.Sprite(PIXI.Texture.EMPTY);
+      skySpr.visible = false;
+      app.stage.addChild(skySpr);
+      const sky = new PIXI.Graphics();
+      app.stage.addChild(sky);
+      const seas = [0, 1].map(() => {
+        const spr = glowSprite(PIXI, glow, 0xb8c4d8);
+        spr.alpha = 0;
+        app.stage.addChild(spr);
+        return spr;
+      });
+      const flare = glowSprite(PIXI, bloomTex, 0xffffff);
+      flare.alpha = 0;
+      app.stage.addChild(flare);
+      const halo = glowSprite(PIXI, bloomTex, 0xffffff);
+      halo.alpha = 0;
+      app.stage.addChild(halo);
+      const body = new PIXI.Graphics();
+      app.stage.addChild(body);
+      const groundSpr = new PIXI.Sprite(PIXI.Texture.EMPTY);
+      groundSpr.visible = false;
+      app.stage.addChild(groundSpr);
+      const ground = new PIXI.Graphics();
+      app.stage.addChild(ground);
       const g = new PIXI.Graphics();
       g.blendMode = 'add';
       app.stage.addChild(g);
       const core = glowSprite(PIXI, glow, 0xffffff);
       app.stage.addChild(core);
+
+      const skyCache = { key: '' };
+      const groundCache = { key: '' };
 
       let t = 0;
       app.ticker.add((ticker) => {
@@ -57,10 +266,101 @@
         const h = app.screen.height;
         const cx = w * 0.5;
         const hy = h * s.horizon;
+        // Pos 50/50 = on the vanishing point. Y rides Horizon; offset is (slider - 50%).
+        const sx = w * s.sunX;
+        const sy = hy + h * (s.sunY - 0.5);
+        const R = Math.min(w, h) * s.sunSz;
         const fc = hexToPixi(s.floorC);
         const cc = hexToPixi(s.ceilC);
-        const hue = hexHsl(s.floorC);
-        app.renderer.background.color = hsl(hue.h, 40, 5);
+        const floor = hexHsl(s.floorC);
+        const ceil = hexHsl(s.ceilC);
+        const land = s.bg === 'sunset' || s.bg === 'night';
+        const night = s.bg === 'night';
+        const smooth = s.grad === 'smooth';
+
+        sky.clear();
+        body.clear();
+        ground.clear();
+
+        if (land) {
+          const sunH = 32 + floor.h * 0.08;
+          const colorAt = night
+            ? (u) => skyNight(u, ceil.h)
+            : (u) => skySunset(u, ceil.h);
+          const floorAt = (v) => groundAt(v, floor.h, night);
+          app.renderer.background.color = colorAt(0);
+          if (smooth) {
+            applyGrad(skySpr, PIXI, w, 0, hy, colorAt, skyCache);
+            applyGrad(groundSpr, PIXI, w, hy, h - hy, floorAt, groundCache);
+          } else {
+            skySpr.visible = false;
+            groundSpr.visible = false;
+            const phase = t * 0.22 * s.rush;
+            paintWarpBands(
+              sky, w, s.ribs, phase,
+              (z) => hy - hy * z,
+              (z) => colorAt(1 - z),
+            );
+            paintWarpBands(
+              ground, w, s.ribs, phase,
+              (z) => hy + (h - hy) * z,
+              floorAt,
+            );
+          }
+          paintSkyBits(sky, w, hy, s.cover, night, t);
+
+          seas[0].position.set(w * 0.22, hy * 0.28);
+          seas[1].position.set(w * 0.78, hy * 0.18);
+          seas[0].scale.set(R / 10);
+          seas[1].scale.set(R / 14);
+          seas[0].tint = night ? 0x4a6a9a : 0xff4ad2;
+          seas[1].tint = night ? 0x3d4e88 : 0xc44bff;
+          seas[0].alpha = night ? 0.1 : 0.18;
+          seas[1].alpha = night ? 0.08 : 0.14;
+
+          const glow = s.sunGlow;
+          const inten = s.sunInt;
+          const pulse = 1.04 + 0.04 * Math.sin(t * (night ? 0.7 : 1.1));
+          const tint = night ? 0xc8d8ff : hsl(sunH, 92, 62);
+          flare.position.set(sx, sy);
+          flare.tint = tint;
+          flare.scale.set((R / (night ? 9 : 7)) * glow * pulse);
+          flare.alpha = (night ? 0.1 : 0.22) * glow * Math.min(1.4, inten);
+          halo.position.set(sx, sy);
+          halo.tint = tint;
+          halo.scale.set((R / (night ? 15 : 12)) * glow * pulse);
+          halo.alpha = (night ? 0.28 : 0.55) * glow * Math.min(1.4, inten);
+
+          const diskA = Math.min(1, 0.45 + 0.5 * inten);
+          if (night) {
+            body.circle(sx, sy, R).fill({
+              color: hsl(ceil.h * 0.12 + 210, 18, 70 + 12 * Math.min(inten, 1.2)),
+              alpha: diskA,
+            });
+          } else {
+            paintSun(
+              body, sx, sy, R,
+              hsl(sunH, 95, 40 + 18 * Math.min(inten, 1.5)),
+              diskA, colorAt, hy,
+            );
+          }
+
+          core.position.set(sx, sy);
+          core.tint = night ? 0xe8f0ff : hsl(sunH, 90, 70);
+          core.scale.set((R / 22) * glow * pulse);
+          core.alpha = (night ? 0.16 : 0.35) * glow * Math.min(1.2, inten);
+        } else {
+          skySpr.visible = false;
+          groundSpr.visible = false;
+          app.renderer.background.color = hsl(floor.h, 40, 5);
+          flare.alpha = 0;
+          halo.alpha = 0;
+          core.tint = 0xffffff;
+          core.scale.set(1.6 + 0.6 * Math.sin(t * 2.4));
+          core.alpha = 0.28;
+          core.position.set(cx, hy);
+          for (const spr of seas) spr.alpha = 0;
+        }
 
         g.clear();
         const span = w * 1.35;
@@ -80,11 +380,6 @@
           glowLine(g, [cx - half, yf, cx + half, yf], fc, s.thick);
           glowLine(g, [cx - half, yc, cx + half, yc], cc, s.thick);
         }
-
-        core.position.set(cx, hy);
-        core.tint = 0xffffff;
-        core.scale.set(1.6 + 0.6 * Math.sin(t * 2.4));
-        core.alpha = 0.28;
       });
     }, { background: 0x050510 });
   </script>
