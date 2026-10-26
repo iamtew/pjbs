@@ -6,7 +6,7 @@ export const PALS = {
   abyss: { h0: 186, span: 38, sat: 72 },
   toxic: { h0: 82, span: 36, sat: 82 },
   candy: { h0: 318, span: 40, sat: 78 },
-  noir: { h0: 220, span: 18, sat: 8 },
+  noir: { h0: 220, span: 18, sat: 5, lift: -14 },
   solar: { h0: 44, span: 26, sat: 92 },
   royal: { h0: 252, span: 28, sat: 68 },
   crimson: { h0: 348, span: 20, sat: 82 },
@@ -61,7 +61,7 @@ export function paintCubes(g, cells, t, st, hsl, w, h) {
     const lift = pal.lift || 0;
     const topL = 42 + 20 * wave + lift;
     const leftL = 26 + 14 * (0.5 + 0.5 * Math.sin(phase + 2.1)) + lift * 0.4;
-    const rightL = 14 + 12 * (0.5 + 0.5 * Math.sin(phase + 4.2));
+    const rightL = 14 + 12 * (0.5 + 0.5 * Math.sin(phase + 4.2)) + Math.min(0, lift) * 0.5;
     const walk = t * st.hue + cell.col * 2.5 + cell.row * 1.5;
     const hCell = pal.h0 + ((walk % pal.span) + pal.span) % pal.span;
 
