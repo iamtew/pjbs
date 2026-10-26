@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Radar — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, rand, hsl, glowSprite, glowLine,
+    } from '../shared/boot.js';
+    import { mountSettings, hexToPixi, hexHsl } from '../shared/settings.js';
+
+    const REBUILD = new Set(['blips', 'reset']);
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Radar',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'spin', label: 'Sweep', min: 0.2, max: 3, step: 0.05, def: 0.85 },
+            { key: 'rings', label: 'Rings', min: 3, max: 12, step: 1, def: 6, int: true },
+            { key: 'blips', label: 'Blips', min: 6, max: 48, step: 1, def: 18, int: true },
+            { key: 'pings', label: 'Pings', min: 1, max: 6, step: 1, def: 3, int: true },
+            { key: 'trail', label: 'Sweep trail', min: 0.08, max: 0.55, step: 0.01, def: 0.22 },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'gridC', label: 'Grid', type: 'color', def: '#22c55e' },
+            { key: 'blipC', label: 'Blips', type: 'color', def: '#bbf7d0' },
+          ],
+        },
+      ],
+    });
+
+    boot((app, PIXI, glow) => {
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+      let blips = [];
+      const core = glowSprite(PIXI, glow, 0xbbf7d0);
+      app.stage.addChild(core);
+
+      function spawn() {
+        const s = ui.state;
+        for (const spr of blips) spr.destroy();
+        blips = Array.from({ length: s.blips }, () => {
+          const spr = glowSprite(PIXI, glow, 0xbbf7d0);
+          spr.ang = rand(0, Math.PI * 2);
+          spr.rad = rand(0.12, 0.92);
+          spr.hit = 0;
+          app.stage.addChild(spr);
+          return spr;
+        });
+      }
+
+      spawn();
+      ui.onChange = (_state, key) => {
+        if (REBUILD.has(key)) spawn();
+      };
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const cx = w * 0.5;
+        const cy = h * 0.5;
+        const R = Math.min(w, h) * 0.46;
+        const sweep = (t * s.spin) % (Math.PI * 2);
+        const grid = hexHsl(s.gridC);
+        app.renderer.background.color = hsl(grid.h, 40, 5);
+
+        g.clear();
+        const gc = hexToPixi(s.gridC);
+        for (let i = 1; i <= s.rings; i++) {
+          const r = (i / s.rings) * R;
+          g.circle(cx, cy, r).stroke({ width: 10, color: gc, alpha: 0.04 });
+          g.circle(cx, cy, r).stroke({ width: 1.4, color: gc, alpha: 0.35 });
+        }
+        g.moveTo(cx - R, cy); g.lineTo(cx + R, cy);
+        g.moveTo(cx, cy - R); g.lineTo(cx, cy + R);
+        g.stroke({ width: 1.2, color: gc, alpha: 0.22 });
+
+        const arm = [cx, cy, cx + Math.cos(sweep) * R, cy + Math.sin(sweep) * R];
+        glowLine(g, arm, gc, 1.15);
+
+        const wedges = 14;
+        for (let i = 0; i < wedges; i++) {
+          const u = i / wedges;
+          const a = sweep - u * s.trail * Math.PI * 2;
+          g.moveTo(cx, cy);
+          g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+          g.stroke({ width: 18, color: gc, alpha: 0.045 * (1 - u) });
+        }
+
+        for (let p = 0; p < s.pings; p++) {
+          const u = ((t * 0.35 + p / s.pings) % 1);
+          g.circle(cx, cy, 8 + u * R).stroke({
+            width: 2.2,
+            color: gc,
+            alpha: 0.4 * (1 - u),
+          });
+        }
+
+        const bc = hexToPixi(s.blipC);
+        for (const spr of blips) {
+          const da = Math.abs(Math.atan2(Math.sin(spr.ang - sweep), Math.cos(spr.ang - sweep)));
+          if (da < 0.12) spr.hit = 1;
+          spr.hit = Math.max(0, spr.hit - dt * 0.55);
+          spr.x = cx + Math.cos(spr.ang) * spr.rad * R;
+          spr.y = cy + Math.sin(spr.ang) * spr.rad * R;
+          spr.tint = bc;
+          spr.scale.set(0.18 + spr.hit * 0.55);
+          spr.alpha = 0.08 + spr.hit * 0.85;
+        }
+
+        core.position.set(cx, cy);
+        core.tint = bc;
+        core.scale.set(0.9 + 0.4 * Math.sin(t * 3));
+        core.alpha = 0.35;
+      });
+    }, { background: 0x03140a });
+  </script>
+</body>
+</html>

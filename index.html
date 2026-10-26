@@ -17,7 +17,7 @@
     main {
       position: relative;
       z-index: 2;
-      max-width: 40rem;
+      max-width: 48rem;
       margin: 3rem auto;
       padding: 1.25rem 1.5rem 1.5rem;
       background: rgba(0, 0, 0, 0.72);
@@ -76,8 +76,41 @@
     .aka { color: #e8e8ef; margin: 0.25rem 0 1rem; letter-spacing: 0.02em; }
     p { color: #9a9aa8; }
     a { color: #c4b5fd; }
-    ul { padding-left: 1.2rem; }
-    li { margin: 0.4rem 0; }
+    .catalog {
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+    .catalog h2 {
+      margin: 0 0 0.4rem;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #9a9aa8;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.22rem 0.72rem;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.06);
+      color: #e8e8ef;
+      text-decoration: none;
+      font-size: 0.88rem;
+    }
+    .chip:hover,
+    .chip:focus-visible {
+      border-color: #c4b5fd;
+      box-shadow: 0 0 0 1px #c4b5fd, 0 0 12px rgba(196, 181, 253, 0.35);
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -100,18 +133,48 @@
     <h1>PJBS</h1>
     <p class="aka">Pixi JS BackgroundS</p>
     <p>Glow that never stops. Open a scene, poke the panel, Copy URL, drop it in OBS as a Browser Source. Closed the panel? Double-click.</p>
-    <ul>
-      <li><a href="bgs/starfield.html">Starfield</a> — flow-field streaks</li>
-      <li><a href="bgs/aurora.html">Aurora</a> — bloom ribbons in fog</li>
-      <li><a href="bgs/hexpulse.html">Hex pulse</a> — honeycomb energy wave</li>
-      <li><a href="bgs/kaleido.html">Kaleido</a> — n-fold mandala wash</li>
-      <li><a href="bgs/vortex.html">Vortex</a> — light tunnel, sparks in</li>
-      <li><a href="bgs/sunbleed.html">Sunbleed</a> — orbiting corona</li>
-      <li><a href="bgs/voronoi.html">Voronoi</a> — neon cell walls</li>
-      <li><a href="bgs/flower.html">Flower</a> — Flower of Life, breathing hexes</li>
-      <li><a href="bgs/merkaba.html">Merkaba</a> — counter-spin star tetrahedron</li>
-      <li><a href="bgs/yantra.html">Yantra</a> — triangles, lotus, bindu</li>
-    </ul>
+    <nav class="catalog" aria-label="Backgrounds">
+      <section>
+        <h2>Drift</h2>
+        <div class="chips">
+          <a class="chip" href="bgs/starfield.html" title="Flow-field streaks">Starfield</a>
+          <a class="chip" href="bgs/rainveil.html" title="Vertical glow rain, floor splash">Rainveil</a>
+          <a class="chip" href="bgs/ember.html" title="Rising sparks on a heat wash">Ember</a>
+          <a class="chip" href="bgs/flock.html" title="Boid glow sprites">Flock</a>
+        </div>
+      </section>
+      <section>
+        <h2>Wash</h2>
+        <div class="chips">
+          <a class="chip" href="bgs/aurora.html" title="Bloom ribbons in fog">Aurora</a>
+          <a class="chip" href="bgs/sunbleed.html" title="Orbiting corona">Sunbleed</a>
+          <a class="chip" href="bgs/caustic.html" title="Wobbling underwater light pools">Caustic</a>
+          <a class="chip" href="bgs/lichten.html" title="Branching discharge">Lichten</a>
+        </div>
+      </section>
+      <section>
+        <h2>Orbit</h2>
+        <div class="chips">
+          <a class="chip" href="bgs/vortex.html" title="Light tunnel, sparks in">Vortex</a>
+          <a class="chip" href="bgs/kaleido.html" title="N-fold mandala wash">Kaleido</a>
+          <a class="chip" href="bgs/radar.html" title="Sweep, ping rings, blips">Radar</a>
+          <a class="chip" href="bgs/lissajous.html" title="Harmonic glow trails">Lissajous</a>
+          <a class="chip" href="bgs/torus.html" title="Glow beads on a spinning torus">Torus</a>
+          <a class="chip" href="bgs/merkaba.html" title="Counter-spin star tetrahedron">Merkaba</a>
+        </div>
+      </section>
+      <section>
+        <h2>Lattice</h2>
+        <div class="chips">
+          <a class="chip" href="bgs/hexpulse.html" title="Honeycomb energy wave">Hex pulse</a>
+          <a class="chip" href="bgs/voronoi.html" title="Neon cell walls">Voronoi</a>
+          <a class="chip" href="bgs/circuit.html" title="Orthogonal traces, traveling packets">Circuit</a>
+          <a class="chip" href="bgs/warp.html" title="Perspective grid, traveling dashes">Warp</a>
+          <a class="chip" href="bgs/flower.html" title="Flower of Life, breathing hexes">Flower</a>
+          <a class="chip" href="bgs/yantra.html" title="Triangles, lotus, bindu">Yantra</a>
+        </div>
+      </section>
+    </nav>
   </main>
   <script type="module">
     import { boot, hsl } from './shared/boot.js';

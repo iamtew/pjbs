@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Torus — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, pointer, hsl, glowSprite, glowLine,
+    } from '../shared/boot.js';
+    import { mountSettings, hexToPixi, hexHsl } from '../shared/settings.js';
+
+    const REBUILD = new Set(['beads', 'reset']);
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Torus',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'spin', label: 'Spin', min: 0.1, max: 2.4, step: 0.05, def: 0.7 },
+            { key: 'tilt', label: 'Tilt', min: 0.2, max: 1.3, step: 0.02, def: 0.85 },
+            { key: 'R', label: 'Major R', min: 0.14, max: 0.38, step: 0.01, def: 0.26 },
+            { key: 'r', label: 'Minor r', min: 0.04, max: 0.18, step: 0.01, def: 0.1 },
+            { key: 'beads', label: 'Beads', min: 40, max: 280, step: 4, def: 120, int: true },
+            { key: 'rings', label: 'Wire rings', min: 4, max: 18, step: 1, def: 10, int: true },
+            { key: 'hue', label: 'Hue crawl', min: 0, max: 90, step: 1, def: 28, int: true },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'wireC', label: 'Wire', type: 'color', def: '#818cf8' },
+            { key: 'beadC', label: 'Beads', type: 'color', def: '#f0abfc' },
+          ],
+        },
+        {
+          id: 'pointer',
+          label: 'Pointer',
+          fields: [
+            { key: 'follow', label: 'Follow', min: 0, max: 0.18, step: 0.01, def: 0.05 },
+          ],
+        },
+      ],
+    });
+
+    function rot(p, ax, ay) {
+      let [x, y, z] = p;
+      const cx = Math.cos(ax), sx = Math.sin(ax);
+      let y1 = y * cx - z * sx;
+      let z1 = y * sx + z * cx;
+      y = y1;
+      z = z1;
+      const cy = Math.cos(ay), sy = Math.sin(ay);
+      const x1 = x * cy + z * sy;
+      z1 = -x * sy + z * cy;
+      return [x1, y, z1];
+    }
+
+    boot((app, PIXI, glow) => {
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+      let beads = [];
+
+      function spawn() {
+        const s = ui.state;
+        for (const spr of beads) spr.destroy();
+        beads = Array.from({ length: s.beads }, (_, i) => {
+          const spr = glowSprite(PIXI, glow, hexToPixi(s.beadC));
+          spr.u = (i / s.beads) * Math.PI * 2;
+          spr.v = (i * 2.399) % (Math.PI * 2);
+          app.stage.addChild(spr);
+          return spr;
+        });
+      }
+
+      spawn();
+      app.stage.sortableChildren = true;
+      ui.onChange = (_state, key) => {
+        if (REBUILD.has(key)) spawn();
+      };
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const cx = w * (0.5 + (pointer.x - 0.5) * s.follow);
+        const cy = h * (0.5 + (pointer.y - 0.5) * s.follow);
+        const scale = Math.min(w, h);
+        const R = s.R * scale;
+        const rr = s.r * scale;
+        const ax = s.tilt;
+        const ay = t * s.spin;
+        const wire = hexHsl(s.wireC);
+        const bead = hexHsl(s.beadC);
+        app.renderer.background.color = hsl(wire.h, 32, 6);
+
+        const project = (u, v) => {
+          const p = rot([
+            (R + rr * Math.cos(v)) * Math.cos(u),
+            rr * Math.sin(v),
+            (R + rr * Math.cos(v)) * Math.sin(u),
+          ], ax, ay);
+          const z = p[2] + scale * 0.85;
+          const f = scale * 0.9 / z;
+          return { x: cx + p[0] * f, y: cy + p[1] * f, z, f };
+        };
+
+        g.clear();
+        const wc = hexToPixi(s.wireC);
+        const steps = 48;
+        for (let i = 0; i < s.rings; i++) {
+          const v = (i / s.rings) * Math.PI * 2;
+          const pts = [];
+          for (let k = 0; k <= steps; k++) {
+            const u = (k / steps) * Math.PI * 2;
+            const p = project(u, v);
+            pts.push(p.x, p.y);
+          }
+          glowLine(g, pts, wc, 0.45);
+        }
+
+        const bc = hexToPixi(s.beadC);
+        for (const spr of beads) {
+          spr.u += dt * 0.35;
+          spr.v += dt * 0.55;
+          const p = project(spr.u, spr.v);
+          spr.x = p.x;
+          spr.y = p.y;
+          spr.tint = hsl((bead.h + t * s.hue + spr.u * 20) % 360, bead.s, bead.l);
+          const depth = Math.max(0.35, Math.min(1.4, p.f * 1.1));
+          spr.scale.set(0.18 * depth);
+          spr.alpha = 0.25 + 0.55 * Math.min(1, depth);
+          spr.zIndex = p.z;
+        }
+      });
+    }, { background: 0x0a0818 });
+  </script>
+</body>
+</html>

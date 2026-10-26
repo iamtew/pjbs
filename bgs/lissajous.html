@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lissajous — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, hsl, glowLine, glowSprite,
+    } from '../shared/boot.js';
+    import { mountSettings, hexToPixi, hexHsl } from '../shared/settings.js';
+
+    const PAL = ['#f0abfc', '#67e8f9', '#fde68a', '#fda4af'];
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Lissajous',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'fx', label: 'Freq X', min: 1, max: 7, step: 1, def: 3, int: true },
+            { key: 'fy', label: 'Freq Y', min: 1, max: 7, step: 1, def: 2, int: true },
+            { key: 'traces', label: 'Traces', min: 1, max: 6, step: 1, def: 3, int: true },
+            { key: 'len', label: 'Trail len', min: 40, max: 220, step: 4, def: 120, int: true },
+            { key: 'thick', label: 'Thick', min: 0.4, max: 2.2, step: 0.05, def: 1, fmt: x },
+            { key: 'size', label: 'Size', min: 0.2, max: 0.48, step: 0.01, def: 0.36 },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'pal', label: 'Trace colors', type: 'palette', def: PAL },
+          ],
+        },
+      ],
+    });
+
+    boot((app, PIXI, glow) => {
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+      const head = glowSprite(PIXI, glow, 0xffffff);
+      app.stage.addChild(head);
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const cx = w * 0.5;
+        const cy = h * 0.5;
+        const ax = Math.min(w, h) * s.size;
+        const ay = ax * 0.78;
+        const hue = hexHsl(s.pal[0]);
+        app.renderer.background.color = hsl(hue.h, 28, 6);
+
+        g.clear();
+        for (let k = 0; k < s.traces; k++) {
+          const pts = [];
+          const phase = k * 0.55;
+          const fx = s.fx + (k % 2) * 0.02;
+          const fy = s.fy;
+          for (let i = 0; i < s.len; i++) {
+            const u = t * 0.85 - i * 0.018;
+            pts.push(
+              cx + Math.sin(u * fx + phase) * ax,
+              cy + Math.sin(u * fy) * ay,
+            );
+          }
+          glowLine(g, pts, hexToPixi(s.pal[k % s.pal.length]), s.thick);
+        }
+
+        head.x = cx + Math.sin(t * 0.85 * s.fx) * ax;
+        head.y = cy + Math.sin(t * 0.85 * s.fy) * ay;
+        head.tint = hexToPixi(s.pal[0]);
+        head.scale.set(1.1 + 0.5 * Math.sin(t * 4));
+        head.alpha = 0.55;
+      });
+    }, { background: 0x0a0614 });
+  </script>
+</body>
+</html>

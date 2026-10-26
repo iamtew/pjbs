@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Circuit — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, rand, hsl, glowLine, glowSprite,
+    } from '../shared/boot.js';
+    import { mountSettings, hexToPixi, hexHsl } from '../shared/settings.js';
+
+    const REBUILD = new Set(['cell', 'traces', 'pkts', 'reset']);
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Circuit',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'cell', label: 'Cell size', min: 28, max: 96, step: 2, def: 48, int: true },
+            { key: 'traces', label: 'Traces', min: 8, max: 48, step: 1, def: 22, int: true },
+            { key: 'pkts', label: 'Packets', min: 6, max: 60, step: 1, def: 24, int: true },
+            { key: 'thick', label: 'Trace thick', min: 0.3, max: 1.8, step: 0.05, def: 0.7 },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'traceC', label: 'Traces', type: 'color', def: '#22d3ee' },
+            { key: 'pktC', label: 'Packets', type: 'color', def: '#fde68a' },
+          ],
+        },
+      ],
+    });
+
+    function manhattan(ax, ay, bx, by) {
+      const viaX = Math.random() < 0.5;
+      return viaX
+        ? [ax, ay, bx, ay, bx, by]
+        : [ax, ay, ax, by, bx, by];
+    }
+
+    boot((app, PIXI, glow) => {
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+      let traces = [];
+      let packets = [];
+
+      function spawn() {
+        const s = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const cell = s.cell;
+        const cols = Math.max(3, Math.floor(w / cell));
+        const rows = Math.max(3, Math.floor(h / cell));
+        const node = (c, r) => ({
+          x: (c + 0.5) * (w / cols),
+          y: (r + 0.5) * (h / rows),
+        });
+        traces = [];
+        for (let i = 0; i < s.traces; i++) {
+          const a = node(rand(0, cols) | 0, rand(0, rows) | 0);
+          const b = node(rand(0, cols) | 0, rand(0, rows) | 0);
+          traces.push(manhattan(a.x, a.y, b.x, b.y));
+        }
+        for (const spr of packets) spr.destroy();
+        packets = Array.from({ length: s.pkts }, (_, i) => {
+          const spr = glowSprite(PIXI, glow, hexToPixi(s.pktC));
+          spr.ti = i % traces.length;
+          spr.u = rand(0, 1);
+          spr.dir = Math.random() < 0.5 ? 1 : -1;
+          spr.spd = rand(0.12, 0.38);
+          app.stage.addChild(spr);
+          return spr;
+        });
+      }
+
+      function along(pts, u) {
+        const segs = [];
+        let total = 0;
+        for (let i = 0; i < pts.length - 2; i += 2) {
+          const dx = pts[i + 2] - pts[i];
+          const dy = pts[i + 3] - pts[i + 1];
+          const len = Math.hypot(dx, dy) || 1;
+          segs.push({ x: pts[i], y: pts[i + 1], dx, dy, len });
+          total += len;
+        }
+        let d = ((u % 1) + 1) % 1 * total;
+        for (const seg of segs) {
+          if (d <= seg.len) {
+            const t = d / seg.len;
+            return { x: seg.x + seg.dx * t, y: seg.y + seg.dy * t };
+          }
+          d -= seg.len;
+        }
+        return { x: pts[pts.length - 2], y: pts[pts.length - 1] };
+      }
+
+      spawn();
+      app.renderer.on('resize', spawn);
+      ui.onChange = (_state, key) => {
+        if (REBUILD.has(key)) spawn();
+      };
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
+        t += dt;
+        const hue = hexHsl(s.traceC);
+        app.renderer.background.color = hsl(hue.h, 35, 5);
+        const tc = hexToPixi(s.traceC);
+        const pc = hexToPixi(s.pktC);
+
+        g.clear();
+        for (const pts of traces) {
+          glowLine(g, pts, tc, s.thick);
+        }
+
+        for (const spr of packets) {
+          spr.u += spr.spd * spr.dir * dt;
+          const pts = traces[spr.ti % traces.length];
+          const p = along(pts, spr.u);
+          spr.x = p.x;
+          spr.y = p.y;
+          spr.tint = pc;
+          spr.scale.set(0.35 + 0.15 * Math.sin(t * 8 + spr.u * 20));
+          spr.alpha = 0.7;
+        }
+      });
+    }, { background: 0x041018 });
+  </script>
+</body>
+</html>

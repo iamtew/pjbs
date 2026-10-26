@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lichten — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, rand, hsl, glowLine, glowSprite,
+    } from '../shared/boot.js';
+    import { mountSettings, hexToPixi, hexHsl } from '../shared/settings.js';
+
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Lichten',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'forks', label: 'Forks', min: 8, max: 48, step: 1, def: 22, int: true },
+            { key: 'depth', label: 'Depth', min: 3, max: 8, step: 1, def: 5, int: true },
+            { key: 'jitter', label: 'Jitter', min: 4, max: 80, step: 1, def: 28, int: true },
+            { key: 'hold', label: 'Hold', min: 0.2, max: 2.5, step: 0.05, def: 0.85 },
+            { key: 'thick', label: 'Bolt thick', min: 0.4, max: 2.2, step: 0.05, def: 1, fmt: x },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'bolt', label: 'Bolt', type: 'color', def: '#c4b5fd' },
+            { key: 'coreC', label: 'Core', type: 'color', def: '#f8fafc' },
+          ],
+        },
+      ],
+    });
+
+    boot((app, PIXI, glow) => {
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+      const core = glowSprite(PIXI, glow, 0xf8fafc);
+      app.stage.addChild(core);
+
+      let branches = [];
+      let origin = { x: 0, y: 0 };
+      let life = 1;
+
+      function recast() {
+        const s = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        origin = { x: rand(w * 0.15, w * 0.85), y: rand(h * 0.08, h * 0.28) };
+        branches = [];
+        const queue = [{ x: origin.x, y: origin.y, ang: Math.PI / 2, d: 0 }];
+        while (queue.length && branches.length < s.forks) {
+          const node = queue.shift();
+          if (node.d >= s.depth) continue;
+          const splits = node.d === 0 ? 3 : (Math.random() < 0.55 ? 2 : 1);
+          for (let i = 0; i < splits && branches.length < s.forks; i++) {
+            const ang = node.ang + rand(-0.7, 0.7);
+            const len = rand(40, 130) * (1 - node.d * 0.12);
+            const pts = [node.x, node.y];
+            let x = node.x;
+            let y = node.y;
+            const steps = 5;
+            for (let k = 1; k <= steps; k++) {
+              x += Math.cos(ang) * (len / steps) + rand(-s.jitter, s.jitter) * 0.25;
+              y += Math.sin(ang) * (len / steps) + rand(-s.jitter, s.jitter) * 0.2;
+              pts.push(x, y);
+            }
+            branches.push({ pts, d: node.d });
+            queue.push({ x, y, ang, d: node.d + 1 });
+          }
+        }
+        life = 0;
+      }
+
+      recast();
+      ui.onChange = (_state, key) => {
+        if (key === 'forks' || key === 'depth' || key === 'jitter' || key === 'reset') recast();
+      };
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
+        t += dt;
+        life += dt / s.hold;
+        if (life > 1) recast();
+        const fade = life < 0.12 ? life / 0.12 : Math.max(0, 1 - (life - 0.12) / 0.88);
+        const hue = hexHsl(s.bolt);
+        app.renderer.background.color = hsl(hue.h, 40, 5 + 3 * fade);
+
+        g.clear();
+        const color = hexToPixi(s.bolt);
+        for (const b of branches) {
+          glowLine(g, b.pts, color, s.thick * (1.1 - b.d * 0.12) * (0.35 + 0.65 * fade));
+        }
+
+        core.tint = hexToPixi(s.coreC);
+        core.position.set(origin.x, origin.y);
+        const flash = fade * (0.7 + 0.3 * Math.sin(t * 40));
+        core.scale.set(1.4 + 2.2 * flash);
+        core.alpha = 0.2 + 0.55 * flash;
+      });
+    }, { background: 0x08060f });
+  </script>
+</body>
+</html>

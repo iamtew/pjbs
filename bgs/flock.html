@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flock — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, rand, clamp, wrap, glowSprite, hsl,
+    } from '../shared/boot.js';
+    import { mountSettings, hexToPixi, hexHsl } from '../shared/settings.js';
+
+    const PAL = ['#7dd3fc', '#c4b5fd', '#f9a8d4', '#6ee7b7'];
+    const REBUILD = new Set(['count', 'reset']);
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Flock',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'count', label: 'Birds', min: 20, max: 180, step: 1, def: 70, int: true },
+            { key: 'maxSpd', label: 'Max speed', min: 40, max: 280, step: 5, def: 120, int: true },
+            { key: 'sep', label: 'Separate', min: 8, max: 80, step: 1, def: 28, int: true },
+            { key: 'view', label: 'View', min: 40, max: 220, step: 5, def: 90, int: true },
+            { key: 'trail', label: 'Trail stretch', min: 1, max: 5, step: 0.1, def: 2.4 },
+            { key: 'szLo', label: 'Size min', min: 0.08, max: 0.5, step: 0.01, def: 0.16 },
+            { key: 'szHi', label: 'Size max', min: 0.16, max: 0.8, step: 0.01, def: 0.32 },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'pal', label: 'Flock colors', type: 'palette', def: PAL },
+          ],
+        },
+      ],
+    });
+
+    boot((app, PIXI, glow) => {
+      let birds = [];
+
+      function spawn() {
+        const s = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        for (const spr of birds) spr.destroy();
+        birds = Array.from({ length: s.count }, (_, i) => {
+          const spr = glowSprite(PIXI, glow, hexToPixi(s.pal[i % s.pal.length]));
+          spr.x = rand(0, w);
+          spr.y = rand(0, h);
+          const a = rand(0, Math.PI * 2);
+          spr.vx = Math.cos(a) * s.maxSpd * 0.6;
+          spr.vy = Math.sin(a) * s.maxSpd * 0.6;
+          spr.size = rand(s.szLo, s.szHi);
+          spr.ci = i % s.pal.length;
+          app.stage.addChild(spr);
+          return spr;
+        });
+      }
+
+      spawn();
+      ui.onChange = (_state, key) => {
+        if (REBUILD.has(key) || key === 'szLo' || key === 'szHi') spawn();
+      };
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const hue = hexHsl(s.pal[0]);
+        app.renderer.background.color = hsl(hue.h, 30, 6);
+        const n = birds.length;
+        // ponytail: O(n²) neighbor scan; spatial hash if count > ~200
+        for (let i = 0; i < n; i++) {
+          const b = birds[i];
+          let sx = 0, sy = 0, sc = 0;
+          let ax = 0, ay = 0, ac = 0;
+          let cx = 0, cy = 0, cc = 0;
+          for (let j = 0; j < n; j++) {
+            if (i === j) continue;
+            const o = birds[j];
+            const dx = o.x - b.x;
+            const dy = o.y - b.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < s.sep * s.sep && d2 > 0.01) {
+              sx -= dx;
+              sy -= dy;
+              sc++;
+            } else if (d2 < s.view * s.view) {
+              ax += o.vx;
+              ay += o.vy;
+              ac++;
+              cx += o.x;
+              cy += o.y;
+              cc++;
+            }
+          }
+          if (sc) { b.vx += (sx / sc) * 2.2; b.vy += (sy / sc) * 2.2; }
+          if (ac) { b.vx += (ax / ac - b.vx) * 0.05; b.vy += (ay / ac - b.vy) * 0.05; }
+          if (cc) { b.vx += (cx / cc - b.x) * 0.012; b.vy += (cy / cc - b.y) * 0.012; }
+          const spd = Math.hypot(b.vx, b.vy) || 1;
+          const cap = s.maxSpd;
+          if (spd > cap) {
+            b.vx = (b.vx / spd) * cap;
+            b.vy = (b.vy / spd) * cap;
+          }
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          wrap(b, w, h, 30);
+          b.tint = hexToPixi(s.pal[b.ci % s.pal.length]);
+          b.rotation = Math.atan2(b.vy, b.vx);
+          b.scale.set(b.size * s.trail, b.size);
+          b.alpha = 0.35 + 0.5 * clamp(spd / cap, 0.2, 1);
+        }
+      });
+    }, { background: 0x070816 });
+  </script>
+</body>
+</html>

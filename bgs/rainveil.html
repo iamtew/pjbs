@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rainveil — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, rand, clamp, wrap, glowSprite, hsl,
+    } from '../shared/boot.js';
+    import { mountSettings, hexToPixi, hexHsl } from '../shared/settings.js';
+
+    const PAL = ['#7dd3fc', '#a5b4fc', '#e0f2fe', '#67e8f9'];
+    const REBUILD = new Set(['dens', 'splashes', 'reset']);
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Rainveil',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'dens', label: 'Density', min: 0.25, max: 2.5, step: 0.05, def: 1, fmt: x },
+            { key: 'fall', label: 'Fall', min: 80, max: 900, step: 10, def: 380, int: true },
+            { key: 'trail', label: 'Trail stretch', min: 1.2, max: 8, step: 0.1, def: 4.2 },
+            { key: 'szLo', label: 'Drop size min', min: 0.04, max: 0.4, step: 0.01, def: 0.07 },
+            { key: 'szHi', label: 'Drop size max', min: 0.08, max: 0.7, step: 0.01, def: 0.22 },
+            { key: 'splashes', label: 'Splashes', min: 8, max: 80, step: 1, def: 28, int: true },
+            { key: 'floor', label: 'Floor height', min: 0.02, max: 0.25, step: 0.01, def: 0.08 },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'pal', label: 'Drop colors', type: 'palette', def: PAL },
+          ],
+        },
+      ],
+    });
+
+    boot((app, PIXI, glow) => {
+      let drops = [];
+      let splashes = [];
+
+      function spawn() {
+        const s = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const n = clamp(Math.round((w * h) / 4200 * s.dens), 40, 700);
+        for (const spr of drops) spr.destroy();
+        drops = [];
+        for (let i = 0; i < n; i++) {
+          const spr = glowSprite(PIXI, glow, hexToPixi(s.pal[i % s.pal.length]));
+          spr.x = rand(0, w);
+          spr.y = rand(0, h);
+          spr.size = rand(s.szLo, s.szHi);
+          spr.vy = rand(0.55, 1.15);
+          spr.ci = i % s.pal.length;
+          app.stage.addChild(spr);
+          drops.push(spr);
+        }
+        for (const spr of splashes) spr.destroy();
+        splashes = Array.from({ length: s.splashes }, (_, i) => {
+          const spr = glowSprite(PIXI, glow, hexToPixi(s.pal[i % s.pal.length]));
+          spr.x = rand(0, w);
+          spr.life = rand(0, 1);
+          spr.ci = i % s.pal.length;
+          app.stage.addChild(spr);
+          return spr;
+        });
+      }
+
+      spawn();
+      ui.onChange = (_state, key) => {
+        if (REBUILD.has(key) || key === 'szLo' || key === 'szHi') spawn();
+      };
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const floorY = h * (1 - s.floor);
+        const hue = hexHsl(s.pal[0]);
+        app.renderer.background.color = hsl(hue.h, Math.max(20, hue.s * 0.4), 7);
+
+        for (const spr of drops) {
+          spr.tint = hexToPixi(s.pal[spr.ci % s.pal.length]);
+          spr.y += s.fall * spr.vy * dt;
+          spr.x += Math.sin(t * 0.8 + spr.y * 0.01) * 18 * dt;
+          if (spr.y > floorY) {
+            spr.y = rand(-80, -10);
+            spr.x = rand(0, w);
+          }
+          wrap(spr, w, h, 40);
+          spr.scale.set(spr.size, spr.size * s.trail);
+          spr.alpha = 0.25 + 0.55 * spr.vy;
+        }
+
+        for (const spr of splashes) {
+          spr.life += dt * (1.4 + spr.ci * 0.07);
+          if (spr.life > 1) {
+            spr.life = 0;
+            spr.x = rand(0, w);
+          }
+          const u = spr.life;
+          spr.y = floorY;
+          spr.tint = hexToPixi(s.pal[spr.ci % s.pal.length]);
+          spr.scale.set(0.4 + u * 2.8, 0.18 + u * 0.55);
+          spr.alpha = (1 - u) * 0.55;
+        }
+      });
+    }, { background: 0x071018 });
+  </script>
+</body>
+</html>
