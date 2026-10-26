@@ -29,6 +29,9 @@
             { key: 'hot', label: 'Hot threshold', min: 0.4, max: 0.95, step: 0.01, def: 0.72 },
             { key: 'colW', label: 'Col wave', min: 0.05, max: 0.8, step: 0.01, def: 0.32 },
             { key: 'rowW', label: 'Row wave', min: 0.05, max: 0.8, step: 0.01, def: 0.2 },
+            { key: 'accN', label: 'Checker every', min: 2, max: 8, step: 1, def: 4, int: true },
+            { key: 'chase', label: 'Chase rate', min: 0, max: 4, step: 0.05, def: 1.2 },
+            { key: 'chaseW', label: 'Chase threshold', min: 0.4, max: 0.95, step: 0.01, def: 0.7 },
             { key: 'sparks', label: 'Sparks', min: 8, max: 120, step: 1, def: 48, int: true },
             { key: 'spVx', label: 'Spark drift X', min: 0, max: 80, step: 1, def: 40, int: true },
             { key: 'spVy', label: 'Spark drift Y', min: 0, max: 40, step: 1, def: 12, int: true },
@@ -126,16 +129,20 @@
         g.clear();
         for (const c of cells) {
           const wave = (Math.sin(c.col * s.colW + c.row * s.rowW - t * s.wave) + 1) * 0.5;
-          const hot = wave > s.hot;
-          const color = c.col % 4 === 0 ? magenta : cyan;
-          const pts = hexPts(c.x, c.y, s.hex * (0.82 + 0.08 * wave));
-          g.poly(pts).fill({ color, alpha: 0.03 + wave * 0.16 });
+          const accent = ((c.col + c.row) % s.accN) === 0;
+          const chase = (Math.sin((c.col - c.row) * 0.45 - t * s.chase) + 1) * 0.5;
+          const chased = accent && chase > s.chaseW;
+          const hot = wave > s.hot || chased;
+          const color = accent ? magenta : cyan;
+          const size = s.hex * (0.82 + 0.08 * wave + (chased ? 0.06 * chase : 0));
+          const pts = hexPts(c.x, c.y, size);
+          g.poly(pts).fill({ color, alpha: 0.03 + wave * 0.16 + (chased ? 0.08 * chase : 0) });
           if (hot) {
             for (const [width, alpha] of GLOW_PASSES) {
               g.poly(pts).stroke({
                 width: width * 0.18,
                 color,
-                alpha: alpha * wave * 0.85,
+                alpha: alpha * (chased ? Math.max(wave, chase) : wave) * 0.85,
               });
             }
           } else {
