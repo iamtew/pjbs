@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PJBS — Pixi JS BackgroundS</title>
+  <link rel="stylesheet" href="shared/settings.css">
   <style>
     html, body {
       margin: 0;
@@ -22,7 +23,47 @@
       background: rgba(0, 0, 0, 0.72);
       border-radius: 12px;
     }
-    h1 { font-weight: 600; letter-spacing: 0.04em; margin-bottom: 0; }
+    .bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+    }
+    .pals {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+    }
+    .pals button {
+      width: 1.35rem;
+      height: 1.35rem;
+      padding: 0;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      cursor: pointer;
+    }
+    .pals button[aria-pressed="true"] {
+      border-color: #fff;
+      box-shadow: 0 0 0 2px #111, 0 0 0 4px #fff;
+    }
+    .gear {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #e8e8ef;
+      cursor: pointer;
+    }
+    .gear .ti {
+      width: 1.45rem;
+      height: 1.45rem;
+    }
+    h1 { font-weight: 600; letter-spacing: 0.04em; margin: 0; }
     .aka { color: #e8e8ef; margin: 0.25rem 0 1rem; letter-spacing: 0.02em; }
     p { color: #9a9aa8; }
     a { color: #c4b5fd; }
@@ -32,6 +73,21 @@
 </head>
 <body>
   <main>
+    <div class="bar">
+      <div class="pals" role="radiogroup" aria-label="Background palette">
+        <button type="button" data-pal="prism" alt="Prism" aria-label="Prism" title="Prism" style="background:#c026d3"></button>
+        <button type="button" data-pal="magma" alt="Magma" aria-label="Magma" title="Magma" style="background:#f97316"></button>
+        <button type="button" data-pal="abyss" alt="Abyss" aria-label="Abyss" title="Abyss" style="background:#22d3ee"></button>
+        <button type="button" data-pal="toxic" alt="Toxic" aria-label="Toxic" title="Toxic" style="background:#84cc16"></button>
+        <button type="button" data-pal="candy" alt="Candy" aria-label="Candy" title="Candy" style="background:#fb7185"></button>
+        <button type="button" data-pal="noir" alt="Noir" aria-label="Noir" title="Noir" style="background:#71717a"></button>
+        <button type="button" data-pal="solar" alt="Solar" aria-label="Solar" title="Solar" style="background:#facc15"></button>
+        <button type="button" data-pal="royal" alt="Royal" aria-label="Royal" title="Royal" style="background:#6366f1"></button>
+        <button type="button" data-pal="crimson" alt="Crimson" aria-label="Crimson" title="Crimson" style="background:#e11d48"></button>
+        <button type="button" data-pal="foam" alt="Foam" aria-label="Foam" title="Foam" style="background:#2dd4bf"></button>
+      </div>
+      <button type="button" class="gear" id="open-settings" aria-label="Settings" title="Settings"></button>
+    </div>
     <h1>PJBS</h1>
     <p class="aka">Pixi JS BackgroundS</p>
     <p>Glow that never stops. Open a scene, poke the panel, Copy URL, drop it in OBS as a Browser Source. Closed the panel? Double-click.</p>
@@ -50,10 +106,94 @@
   </main>
   <script type="module">
     import { boot, hsl } from './shared/boot.js';
+    import { mountSettings, ti } from './shared/settings.js';
 
-    const S = 21;
-    const HORIZ = S * Math.sqrt(3);
-    const VERT = S * 1.5;
+    const PALS = {
+      prism: { h0: 0, span: 360, sat: 62 },
+      magma: { h0: 8, span: 42, sat: 86 },
+      abyss: { h0: 186, span: 38, sat: 72 },
+      toxic: { h0: 82, span: 36, sat: 82 },
+      candy: { h0: 318, span: 40, sat: 78 },
+      noir: { h0: 220, span: 18, sat: 8 },
+      solar: { h0: 44, span: 26, sat: 92 },
+      royal: { h0: 252, span: 28, sat: 68 },
+      crimson: { h0: 348, span: 20, sat: 82 },
+      foam: { h0: 162, span: 24, sat: 48 },
+    };
+
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Landing',
+      sections: [
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'size', label: 'Cell size', min: 12, max: 40, step: 1, def: 21, int: true },
+            { key: 'swell', label: 'Swell', min: 0, max: 1.5, step: 0.05, def: 1, fmt: x },
+            { key: 'speed', label: 'Pulse', min: 0.2, max: 4, step: 0.05, def: 1, fmt: x },
+            { key: 'hue', label: 'Hue crawl', min: 0, max: 40, step: 1, def: 14, int: true },
+            { key: 'wave', label: 'Light wave', min: 0.2, max: 3, step: 0.05, def: 1.15 },
+            {
+              key: 'pal',
+              label: 'Palette',
+              type: 'choice',
+              options: Object.keys(PALS),
+              def: 'prism',
+              skipUi: true,
+            },
+          ],
+        },
+      ],
+    });
+
+    const palBtns = [...document.querySelectorAll('.pals [data-pal]')];
+    function syncPals() {
+      for (const btn of palBtns) {
+        btn.setAttribute('aria-pressed', String(btn.dataset.pal === ui.state.pal));
+      }
+    }
+    for (const btn of palBtns) {
+      btn.addEventListener('click', () => ui.setField('pal', btn.dataset.pal));
+    }
+    syncPals();
+    ui.onChange = (_state, key) => {
+      if (key === 'pal' || key === 'reset') syncPals();
+      if (key === 'size' || key === 'reset') layout();
+    };
+
+    const gear = document.getElementById('open-settings');
+    gear.appendChild(ti('settings'));
+    gear.addEventListener('click', () => ui.setMenu(ui.state.menu !== 'ON'));
+
+    let cells = [];
+    function layout() {
+      const size = ui.state.size;
+      const horiz = size * Math.sqrt(3);
+      const vert = size * 1.5;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const cols = Math.ceil(w / horiz) + 3;
+      const rows = Math.ceil(h / vert) + 3;
+      const midX = w * 0.5;
+      const midY = h * 0.5;
+      cells = [];
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          cells.push({
+            x: (col - 1) * horiz + ((row & 1) ? horiz * 0.5 : 0),
+            y: (row - 1) * vert,
+            col,
+            row,
+          });
+        }
+      }
+      cells.sort((a, b) => {
+        const da = (a.x - midX) ** 2 + (a.y - midY) ** 2;
+        const db = (b.x - midX) ** 2 + (b.y - midY) ** 2;
+        return db - da;
+      });
+    }
 
     boot((app, PIXI) => {
       const c = app.canvas.style;
@@ -65,32 +205,6 @@
       const g = new PIXI.Graphics();
       app.stage.addChild(g);
 
-      let cells = [];
-      function layout() {
-        const w = app.screen.width;
-        const h = app.screen.height;
-        const cols = Math.ceil(w / HORIZ) + 3;
-        const rows = Math.ceil(h / VERT) + 3;
-        cells = [];
-        const midX = w * 0.5;
-        const midY = h * 0.5;
-        for (let row = 0; row < rows; row++) {
-          for (let col = 0; col < cols; col++) {
-            cells.push({
-              x: (col - 1) * HORIZ + ((row & 1) ? HORIZ * 0.5 : 0),
-              y: (row - 1) * VERT,
-              col,
-              row,
-            });
-          }
-        }
-        // Far cells first so the fat center bulge paints on top.
-        cells.sort((a, b) => {
-          const da = (a.x - midX) ** 2 + (a.y - midY) ** 2;
-          const db = (b.x - midX) ** 2 + (b.y - midY) ** 2;
-          return db - da;
-        });
-      }
       layout();
       app.renderer.on('resize', layout);
 
@@ -98,7 +212,8 @@
       app.ticker.add((ticker) => {
         const dt = Math.min(ticker.deltaMS / 1000, 0.05);
         t += dt;
-        const hue = (t * 14) % 360;
+        const st = ui.state;
+        const pal = PALS[st.pal] || PALS.prism;
         const w = app.screen.width;
         const h = app.screen.height;
         const hx = w * 0.5;
@@ -109,20 +224,19 @@
           const cy = cell.y;
           const nx = (cx - hx) / hx;
           const ny = (cy - hy) / hy;
-          // 1 at center, 0 at corners — wide dome, not a hotspot.
           const d = Math.min(1, Math.hypot(nx, ny) / Math.SQRT2);
           const bulge = 1 - d * d;
-          // Floor at lattice size so edges stay flush; extra size breathes.
-          const breathe = 0.5 + 0.5 * Math.sin(t * 2.1 - d * 2.4);
-          const s = S * (1 + bulge * (0.85 + 0.15 * breathe));
+          const breathe = 0.5 + 0.5 * Math.sin(t * 2.1 * st.speed - d * 2.4);
+          const s = st.size * (1 + bulge * st.swell * (0.85 + 0.15 * breathe));
           const dx = s * Math.sqrt(3) / 2;
           const dy = s / 2;
-          const wave = (Math.sin(cell.col * 0.35 + cell.row * 0.22 - t * 1.15) + 1) * 0.5;
-          const phase = t * 0.8 + cell.col * 0.4 + cell.row * 0.25;
+          const wave = (Math.sin(cell.col * 0.35 + cell.row * 0.22 - t * st.wave) + 1) * 0.5;
+          const phase = t * 0.8 * st.speed + cell.col * 0.4 + cell.row * 0.25;
           const topL = 42 + 20 * wave;
           const leftL = 26 + 14 * (0.5 + 0.5 * Math.sin(phase + 2.1));
           const rightL = 14 + 12 * (0.5 + 0.5 * Math.sin(phase + 4.2));
-          const hCell = hue + cell.col * 2.5 + cell.row * 1.5;
+          const walk = t * st.hue + cell.col * 2.5 + cell.row * 1.5;
+          const hCell = pal.h0 + ((walk % pal.span) + pal.span) % pal.span;
 
           const top = [
             cx, cy - s,
@@ -144,9 +258,9 @@
           ];
 
           const faces = [
-            [top, hsl(hCell, 62, topL)],
-            [left, hsl(hCell, 58, leftL)],
-            [right, hsl(hCell, 55, rightL)],
+            [top, hsl(hCell, pal.sat, topL)],
+            [left, hsl(hCell, pal.sat * 0.94, leftL)],
+            [right, hsl(hCell, pal.sat * 0.88, rightL)],
           ];
           for (const [pts, color] of faces) {
             g.poly(pts).fill({ color });

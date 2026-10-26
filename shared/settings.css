@@ -67,7 +67,23 @@
   flex-shrink: 0;
 }
 
+.ti {
+  display: inline-flex;
+  width: 1.05em;
+  height: 1.05em;
+  flex-shrink: 0;
+}
+
+.ti svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .menu-header-buttons button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 1.8rem;
   height: 1.8rem;
   padding: 0;
@@ -115,6 +131,9 @@
 }
 
 .setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   width: 100%;
   padding: 0.35rem 0.5rem;
   border: 1px solid var(--settings-border);
@@ -126,6 +145,17 @@
   font-size: 1rem;
   font-weight: 600;
   text-align: left;
+}
+
+.section-toggle-icon {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  transition: transform 120ms ease;
+}
+
+.setting-toggle[aria-expanded="true"] .section-toggle-icon {
+  transform: rotate(90deg);
 }
 
 .setting-toggle:hover,
@@ -191,6 +221,9 @@
 }
 
 .reset-param {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 1.45rem;
   height: 1.45rem;
   padding: 0;
@@ -210,6 +243,10 @@
 
 #reset-button,
 .small-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   width: 100%;
   padding: 0.35rem 0.5rem;
   border-radius: 4px;

@@ -17,11 +17,12 @@ Canvas fill is not required to be black; scenes may wash/hue the renderer backgr
 Use **Clanker** / **Meat Bag** in this file, in new comments where natural, and in chat. Do not call Clankers "AI", "the assistant", or "LLM". Do not rewrite existing comments or docs solely to swap terminology.
 
 ## Layout
-- `index.html` — landing list of backgrounds
+- `index.html` — landing list + isometric cube canvas. Palette chips set `pal`; gear opens `mountSettings`.
 - `bgs/*.html` — one fullscreen scene per file
 - `shared/boot.js` — PixiJS v8.22.0 from jsDelivr (`pixi.min.mjs`), plus `glowTexture` / `glowSprite` / `glowLine` / `wrap` / `pointer` / `hsl`. `boot(setup, { background })` for a non-black start color.
 - `shared/style.css` — fullscreen canvas reset
-- `shared/settings.js` + `shared/settings.css` — Control UI shell (`mountSettings`). URL query is the complete config. Panel starts **closed**; `menu=ON` shows it. Double-click reopens. `side=left` (omit when `right`). Copy URL for OBS rebuilds the query without `menu=ON`. Live `input` → scene + `replaceState` (omit defaults). Color fields use Iro (`type: 'color'` / `'palette'`). Canvas stays opaque (these are backgrounds, not overlays).
+- `shared/settings.js` + `shared/settings.css` — Control UI shell (`mountSettings`). URL query is the complete config. Panel starts **closed**; `menu=ON` shows it. Double-click reopens. `side=left` (omit when `right`). Copy URL for OBS rebuilds the query without `menu=ON`. Live `input` → scene + `replaceState` (omit defaults). Color fields use Iro (`type: 'color'` / `'palette'`). Hidden `type: 'choice'` is URL-only. Canvas stays opaque (these are backgrounds, not overlays). Header/reset/copy use Tabler outline icons.
+- `shared/icons/` — vendored Tabler outline SVGs (MIT).
 
 No bundler.
 

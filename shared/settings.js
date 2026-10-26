@@ -86,24 +86,30 @@ function cloneDef(field) {
 function coerce(field, raw) {
   if (field.type === 'color') return normHex(raw, field.def);
   if (field.type === 'palette') return parsePalette(raw, field.def);
+  if (field.type === 'choice') {
+    const v = String(raw);
+    return field.options.includes(v) ? v : field.def;
+  }
   return clampRange(field, raw);
 }
 
 function serialize(field, value) {
   if (field.type === 'color') return normHex(value, field.def).slice(1);
   if (field.type === 'palette') return value.map((h, i) => normHex(h, field.def[i]).slice(1)).join(',');
+  if (field.type === 'choice') return String(value);
   if (field.int) return String(Math.round(value));
   return String(clampRange(field, value));
 }
 
 function flash(button, temp) {
-  const original = button.textContent;
+  const label = button.querySelector('.btn-label') || button;
+  const original = label.textContent;
   button.classList.add('is-clicked');
-  button.textContent = temp;
+  label.textContent = temp;
   clearTimeout(button._flash);
   button._flash = setTimeout(() => {
     button.classList.remove('is-clicked');
-    button.textContent = original;
+    label.textContent = original;
   }, 550);
 }
 
@@ -119,6 +125,23 @@ function el(tag, attrs, ...kids) {
   }
   for (const kid of kids) if (kid) node.appendChild(kid);
   return node;
+}
+
+// Tabler outline SVGs (MIT), vendored in ./icons
+const TI_DIR = new URL('./icons/', import.meta.url);
+const tiCache = new Map();
+
+export function ti(name) {
+  const wrap = el('span', { class: 'ti', 'aria-hidden': 'true' });
+  let p = tiCache.get(name);
+  if (!p) {
+    p = fetch(new URL(`${name}.svg`, TI_DIR)).then((r) => r.text());
+    tiCache.set(name, p);
+  }
+  p.then((svg) => {
+    wrap.innerHTML = svg;
+  });
+  return wrap;
 }
 
 const IRO_OPTS = {
@@ -149,8 +172,10 @@ export function mountSettings({ title, sections, onChange }) {
 
   const menu = el('div', { id: 'settings-menu' });
   const titleEl = el('h2', { text: title });
-  const flip = el('button', { id: 'flip-side-button', type: 'button', 'aria-label': 'Move menu to other side', text: '⇄' });
-  const close = el('button', { id: 'close-menu-button', type: 'button', 'aria-label': 'Close settings', text: '✕' });
+  const flip = el('button', { id: 'flip-side-button', type: 'button', 'aria-label': 'Move menu to other side', title: 'Move menu' });
+  flip.appendChild(ti('arrows-left-right'));
+  const close = el('button', { id: 'close-menu-button', type: 'button', 'aria-label': 'Close settings', title: 'Close' });
+  close.appendChild(ti('x'));
   menu.append(
     el('div', { class: 'menu-header' }, titleEl, el('div', { class: 'menu-header-buttons' }, flip, close)),
     el('p', { class: 'hint', text: 'Settings hidden: double-click to reopen. Copy URL for OBS for clean output.' }),
@@ -274,8 +299,8 @@ export function mountSettings({ title, sections, onChange }) {
       'data-reset': field.key,
       'aria-label': `Reset ${field.label}`,
       title: `Reset ${field.label}`,
-      text: '↺',
     });
+    reset.appendChild(ti('refresh'));
     hex.value = currentColor(field);
     hex.addEventListener('change', () => writeColor(field, hex.value));
     wrap.append(mount, el('div', { class: 'color-hex-row' }, hex, reset));
@@ -295,12 +320,14 @@ export function mountSettings({ title, sections, onChange }) {
       'aria-controls': panelId,
       'data-section-toggle': '',
     });
-    const icon = el('span', { class: 'section-toggle-icon', 'aria-hidden': 'true', text: open ? '⏷' : '⏵' });
+    const icon = el('span', { class: 'section-toggle-icon', 'aria-hidden': 'true' });
+    icon.appendChild(ti('chevron-right'));
     toggle.append(icon, document.createTextNode(section.label));
     const panel = el('div', { id: panelId, class: 'section-panel' });
     if (!open) panel.hidden = true;
 
     for (const field of section.fields) {
+      if (field.skipUi) continue;
       if (field.type === 'color' || field.type === 'palette') {
         panel.appendChild(colorBlock(field));
         continue;
@@ -320,8 +347,8 @@ export function mountSettings({ title, sections, onChange }) {
         'data-reset': field.key,
         'aria-label': `Reset ${field.label}`,
         title: `Reset ${field.label}`,
-        text: '↺',
       });
+      reset.appendChild(ti('refresh'));
       panel.appendChild(
         el(
           'div',
@@ -346,15 +373,17 @@ export function mountSettings({ title, sections, onChange }) {
     toggles.push({ toggle, panel, icon });
   });
 
-  const resetAll = el('button', { id: 'reset-button', class: 'menu-action', type: 'button', text: 'Reset all' });
-  const copyUrl = el('button', { id: 'copy-url-button', class: 'small-button menu-action', type: 'button', text: 'Copy URL' });
-  const copyObs = el('button', { id: 'copy-url-obs-button', class: 'small-button menu-action', type: 'button', text: 'Copy URL for OBS' });
+  const resetAll = el('button', { id: 'reset-button', class: 'menu-action', type: 'button' });
+  resetAll.append(ti('refresh'), el('span', { class: 'btn-label', text: 'Reset all' }));
+  const copyUrl = el('button', { id: 'copy-url-button', class: 'small-button menu-action', type: 'button' });
+  copyUrl.append(ti('copy'), el('span', { class: 'btn-label', text: 'Copy URL' }));
+  const copyObs = el('button', { id: 'copy-url-obs-button', class: 'small-button menu-action', type: 'button' });
+  copyObs.append(ti('copy'), el('span', { class: 'btn-label', text: 'Copy URL for OBS' }));
   menu.append(resetAll, el('div', { class: 'setting-group copy-row' }, copyUrl, copyObs));
   document.body.appendChild(menu);
 
   function stackCanvas() {
     for (const c of document.querySelectorAll('canvas')) {
-      c.style.position = 'relative';
       c.style.zIndex = '1';
     }
   }
@@ -385,12 +414,10 @@ export function mountSettings({ title, sections, onChange }) {
       for (const other of toggles) {
         other.toggle.setAttribute('aria-expanded', 'false');
         other.panel.hidden = true;
-        other.icon.textContent = '⏵';
       }
       if (willOpen) {
         row.toggle.setAttribute('aria-expanded', 'true');
         row.panel.hidden = false;
-        row.icon.textContent = '⏷';
         for (const field of colorUIs) field._iro?.resize(IRO_OPTS.width);
       }
     });
@@ -460,6 +487,15 @@ export function mountSettings({ title, sections, onChange }) {
       flash(copyObs, 'Failed');
     }
   });
+
+  function setMenu(on) {
+    state.menu = on ? 'ON' : 'DISABLE';
+    applyChrome();
+    updateURL();
+  }
+
+  api.setField = setField;
+  api.setMenu = setMenu;
 
   syncInputs();
   applyChrome();
