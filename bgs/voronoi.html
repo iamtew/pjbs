@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voronoi — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+</head>
+<body>
+  <script type="module">
+    import {
+      boot, pointer, rand, wrap, glowSprite, hsl, GLOW_PASSES,
+    } from '../shared/boot.js';
+
+    // Drifting sites. Each cell is the screen clipped by every other site's
+    // perpendicular bisector — that's Voronoi without painting every pixel.
+    const N = 48;
+    const M = 80;
+    const RINGS = [1, 0.68, 0.38];
+
+    function clipHalf(poly, nx, ny, c) {
+      if (poly.length < 6) return poly;
+      const out = [];
+      const n = poly.length;
+      for (let i = 0; i < n; i += 2) {
+        const ax = poly[i];
+        const ay = poly[i + 1];
+        const bx = poly[(i + 2) % n];
+        const by = poly[(i + 3) % n];
+        const da = nx * ax + ny * ay - c;
+        const db = nx * bx + ny * by - c;
+        const den = da - db;
+        const aIn = da <= 0;
+        const bIn = db <= 0;
+        if (aIn && bIn) {
+          out.push(bx, by);
+        } else if (aIn && !bIn) {
+          const u = den === 0 ? 0 : da / den;
+          out.push(ax + (bx - ax) * u, ay + (by - ay) * u);
+        } else if (!aIn && bIn) {
+          const u = den === 0 ? 0 : da / den;
+          out.push(ax + (bx - ax) * u, ay + (by - ay) * u, bx, by);
+        }
+      }
+      return out;
+    }
+
+    function inset(poly, k) {
+      let cx = 0;
+      let cy = 0;
+      const verts = poly.length / 2;
+      for (let i = 0; i < poly.length; i += 2) {
+        cx += poly[i];
+        cy += poly[i + 1];
+      }
+      cx /= verts;
+      cy /= verts;
+      const out = [];
+      for (let i = 0; i < poly.length; i += 2) {
+        out.push(cx + (poly[i] - cx) * k, cy + (poly[i + 1] - cy) * k);
+      }
+      return out;
+    }
+
+    function glowPoly(g, pts, color, scale, amp) {
+      for (const [width, alpha] of GLOW_PASSES) {
+        g.poly(pts).stroke({
+          width: width * scale,
+          color,
+          alpha: alpha * amp,
+        });
+      }
+    }
+
+    boot((app, PIXI, glow) => {
+      const { width: w0, height: h0 } = app.screen;
+
+      // Soft color fog so walls sit in a wash, not on a dark void.
+      const fog = Array.from({ length: 12 }, (_, i) => {
+        const s = glowSprite(PIXI, glow, hsl(i * 30, 95, 55));
+        s.x = rand(0, w0);
+        s.y = rand(0, h0);
+        s.scale.set(rand(9, 16));
+        s.alpha = rand(0.1, 0.18);
+        s.vx = rand(-22, 22);
+        s.vy = rand(-12, 12);
+        s.phase = rand(0, Math.PI * 2);
+        app.stage.addChild(s);
+        return s;
+      });
+
+      const g = new PIXI.Graphics();
+      g.blendMode = 'add';
+      app.stage.addChild(g);
+
+      const sites = Array.from({ length: N }, (_, i) => {
+        const s = glowSprite(PIXI, glow, hsl(i * 7.5, 95, 62));
+        s.x = rand(0, w0);
+        s.y = rand(0, h0);
+        s.vx = rand(-28, 28);
+        s.vy = rand(-22, 22);
+        s.phase = rand(0, Math.PI * 2);
+        s.scale.set(0.5);
+        app.stage.addChild(s);
+        return s;
+      });
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const px = pointer.x * w;
+        const py = pointer.y * h;
+        const r2 = 180 * 180;
+        const trip = 0.5 + 0.5 * Math.sin(t * 0.35);
+
+        app.renderer.background.color = hsl((t * 28) % 360, 78, 7 + 3 * trip);
+
+        for (const s of fog) {
+          s.x += s.vx * dt;
+          s.y += s.vy * dt;
+          s.tint = hsl((t * 40 + s.phase * 50) % 360, 95, 58);
+          s.alpha = 0.09 + 0.12 * (0.5 + 0.5 * Math.sin(t * 1.1 + s.phase));
+          wrap(s, w, h, 280);
+        }
+
+        for (const s of sites) {
+          let vx = s.vx + Math.sin(s.y * 0.004 + t * 1.3) * 28;
+          let vy = s.vy + Math.cos(s.x * 0.004 - t * 1.1) * 28;
+          const dx = s.x - px;
+          const dy = s.y - py;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < r2) {
+            const f = (1 - d2 / r2) * 320 / Math.sqrt(d2 + 1);
+            vx += dx * f;
+            vy += dy * f;
+          }
+          s.x += vx * dt;
+          s.y += vy * dt;
+          wrap(s, w, h, M);
+        }
+
+        const bounds = [-M, -M, w + M, -M, w + M, h + M, -M, h + M];
+        g.clear();
+        for (let i = 0; i < N; i++) {
+          const si = sites[i];
+          let poly = bounds;
+          for (let j = 0; j < N; j++) {
+            if (j === i) continue;
+            const sj = sites[j];
+            const nx = sj.x - si.x;
+            const ny = sj.y - si.y;
+            if (nx * nx + ny * ny < 1) continue;
+            const c = nx * (si.x + sj.x) * 0.5 + ny * (si.y + sj.y) * 0.5;
+            poly = clipHalf(poly, nx, ny, c);
+            if (poly.length < 6) break;
+          }
+          if (poly.length < 6) continue;
+
+          const pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + si.phase);
+          const wave = 0.5 + 0.5 * Math.sin(t * 1.4 + (si.x / w) * 6 + (si.y / h) * 5);
+          const hue = (t * 55 + si.phase * 80 + i * 13) % 360;
+          const breath = 1 + 0.08 * Math.sin(t * 3.1 + si.phase);
+          const amp = 0.45 + pulse * 0.55 + wave * 0.25;
+
+          g.poly(poly).fill({
+            color: hsl((hue + 180) % 360, 95, 52),
+            alpha: 0.05 + pulse * 0.1 + trip * 0.04,
+          });
+
+          for (let r = 0; r < RINGS.length; r++) {
+            const k = RINGS[r] * breath;
+            const ring = r === 0 ? poly : inset(poly, k);
+            const color = hsl((hue + r * 137) % 360, 100, 58 + r * 6);
+            glowPoly(g, ring, color, (0.28 - r * 0.06) * (0.85 + wave * 0.4), amp);
+          }
+
+          si.tint = hsl((hue + 40) % 360, 100, 68);
+          si.alpha = 0.45 + 0.55 * pulse;
+          si.scale.set(0.35 + 0.55 * pulse + 0.2 * trip);
+        }
+      });
+    }, { background: 0x1a0022 });
+  </script>
+</body>
+</html>

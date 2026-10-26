@@ -26,6 +26,7 @@ Current scenes:
 - `bgs/kaleido.html` — n-fold mandala, hue-crawling wash
 - `bgs/vortex.html` — concentric tunnel, sparks spiral in
 - `bgs/sunbleed.html` — orbiting corona on a heat canvas
+- `bgs/voronoi.html` — drifting neon Voronoi walls (pointer repel)
 
 ## Add a background
 1. New file `bgs/<name>.html` — `import { boot, glowSprite, glowLine, wrap } from '../shared/boot.js'`.
