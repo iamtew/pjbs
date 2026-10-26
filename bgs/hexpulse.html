@@ -5,41 +5,79 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hex pulse — PJBS</title>
   <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
 </head>
 <body>
   <script type="module">
     import {
       boot, rand, wrap, glowSprite, GLOW_PASSES,
     } from '../shared/boot.js';
+    import { mountSettings, hexToPixi } from '../shared/settings.js';
+    const REBUILD = new Set(['sparks', 'reset']);
 
-    const CYAN = 0x00e0e0;
-    const MAGENTA = 0xff00ff;
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Hex pulse',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'hex', label: 'Hex size', min: 16, max: 72, step: 1, def: 36, int: true },
+            { key: 'wave', label: 'Wave rate', min: 0.2, max: 4, step: 0.05, def: 1.35 },
+            { key: 'hot', label: 'Hot threshold', min: 0.4, max: 0.95, step: 0.01, def: 0.72 },
+            { key: 'colW', label: 'Col wave', min: 0.05, max: 0.8, step: 0.01, def: 0.32 },
+            { key: 'rowW', label: 'Row wave', min: 0.05, max: 0.8, step: 0.01, def: 0.2 },
+            { key: 'sparks', label: 'Sparks', min: 8, max: 120, step: 1, def: 48, int: true },
+            { key: 'spVx', label: 'Spark drift X', min: 0, max: 80, step: 1, def: 40, int: true },
+            { key: 'spVy', label: 'Spark drift Y', min: 0, max: 40, step: 1, def: 12, int: true },
+            { key: 'spSzLo', label: 'Spark size min', min: 0.04, max: 0.5, step: 0.01, def: 0.12 },
+            { key: 'spSzHi', label: 'Spark size max', min: 0.1, max: 0.8, step: 0.01, def: 0.35 },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'cA', label: 'Cyan', type: 'color', def: '#00e0e0' },
+            { key: 'cB', label: 'Magenta', type: 'color', def: '#ff00ff' },
+          ],
+        },
+      ],
+    });
 
     boot((app, PIXI, glow) => {
-      const { width: w0, height: h0 } = app.screen;
-
       const g = new PIXI.Graphics();
       g.blendMode = 'add';
       app.stage.addChild(g);
 
-      // Sparse sparks that hitch a ride on the wave.
-      const sparks = Array.from({ length: 48 }, (_, i) => {
-        const s = glowSprite(PIXI, glow, i % 2 ? CYAN : MAGENTA);
-        s.x = rand(0, w0);
-        s.y = rand(0, h0);
-        s.scale.set(rand(0.12, 0.35));
-        s.vx = rand(-20, 40);
-        s.vy = rand(-12, 12);
-        app.stage.addChild(s);
-        return s;
-      });
-
+      let sparks = [];
       let cells = [];
-      const size = 36;
-      const wHex = size * 1.75;
-      const hHex = size * 1.52;
+
+      function spawnSparks() {
+        const s = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        for (const spr of sparks) spr.destroy();
+        sparks = Array.from({ length: s.sparks }, (_, i) => {
+          const spr = glowSprite(PIXI, glow, hexToPixi(i % 2 ? s.cA : s.cB));
+          spr.x = rand(0, w);
+          spr.y = rand(0, h);
+          spr.scale.set(rand(s.spSzLo, s.spSzHi));
+          spr.vx = rand(-s.spVx * 0.5, s.spVx);
+          spr.vy = rand(-s.spVy, s.spVy);
+          spr.ci = i % 2;
+          app.stage.addChild(spr);
+          return spr;
+        });
+      }
 
       function layout() {
+        const s = ui.state;
+        const size = s.hex;
+        const wHex = size * 1.75;
+        const hHex = size * 1.52;
         const w = app.screen.width;
         const h = app.screen.height;
         cells = [];
@@ -57,8 +95,14 @@
         }
       }
 
+      spawnSparks();
       layout();
       app.renderer.on('resize', layout);
+      ui.onChange = (_state, key) => {
+        if (key === 'hex') layout();
+        if (REBUILD.has(key) || key === 'spVx' || key === 'spVy' || key === 'spSzLo' || key === 'spSzHi') spawnSparks();
+        if (key === 'reset') layout();
+      };
 
       function hexPts(cx, cy, r) {
         const pts = [];
@@ -71,17 +115,20 @@
 
       let t = 0;
       app.ticker.add((ticker) => {
-        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
         t += dt;
         const w = app.screen.width;
         const h = app.screen.height;
+        const cyan = hexToPixi(s.cA);
+        const magenta = hexToPixi(s.cB);
 
         g.clear();
         for (const c of cells) {
-          const wave = (Math.sin(c.col * 0.32 + c.row * 0.2 - t * 1.35) + 1) * 0.5;
-          const hot = wave > 0.72;
-          const color = c.col % 4 === 0 ? MAGENTA : CYAN;
-          const pts = hexPts(c.x, c.y, size * (0.82 + 0.08 * wave));
+          const wave = (Math.sin(c.col * s.colW + c.row * s.rowW - t * s.wave) + 1) * 0.5;
+          const hot = wave > s.hot;
+          const color = c.col % 4 === 0 ? magenta : cyan;
+          const pts = hexPts(c.x, c.y, s.hex * (0.82 + 0.08 * wave));
           g.poly(pts).fill({ color, alpha: 0.03 + wave * 0.16 });
           if (hot) {
             for (const [width, alpha] of GLOW_PASSES) {
@@ -96,11 +143,12 @@
           }
         }
 
-        for (const s of sparks) {
-          s.x += s.vx * dt;
-          s.y += s.vy * dt + Math.sin(t * 2 + s.x * 0.01) * 8 * dt;
-          s.alpha = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * 3 + s.x * 0.02));
-          wrap(s, w, h);
+        for (const spr of sparks) {
+          spr.tint = spr.ci ? cyan : magenta;
+          spr.x += spr.vx * dt;
+          spr.y += spr.vy * dt + Math.sin(t * 2 + spr.x * 0.01) * 8 * dt;
+          spr.alpha = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * 3 + spr.x * 0.02));
+          wrap(spr, w, h);
         }
       });
     });

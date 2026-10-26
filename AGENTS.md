@@ -13,6 +13,7 @@ Canvas fill is not required to be black; scenes may wash/hue the renderer backgr
 - `bgs/*.html` — one fullscreen scene per file
 - `shared/boot.js` — PixiJS v8.22.0 from jsDelivr (`pixi.min.mjs`), plus `glowTexture` / `glowSprite` / `glowLine` / `wrap` / `pointer` / `hsl`. `boot(setup, { background })` for a non-black start color.
 - `shared/style.css` — fullscreen canvas reset
+- `shared/settings.js` + `shared/settings.css` — Control UI shell (`mountSettings`). URL query is the complete config. Panel starts **closed**; `menu=ON` shows it. Double-click reopens. `side=left` (omit when `right`). Copy URL for OBS rebuilds the query without `menu=ON`. Live `input` → scene + `replaceState` (omit defaults). Color fields use Iro (`type: 'color'` / `'palette'`). Canvas stays opaque (these are backgrounds, not overlays).
 
 No bundler.
 
@@ -29,10 +30,11 @@ Current scenes:
 - `bgs/voronoi.html` — drifting neon Voronoi walls (pointer repel)
 
 ## Add a background
-1. New file `bgs/<name>.html` — `import { boot, glowSprite, glowLine, wrap } from '../shared/boot.js'`.
+1. New file `bgs/<name>.html` — `import { boot, glowSprite, glowLine, wrap } from '../shared/boot.js'` and `import { mountSettings } from '../shared/settings.js'`. Link `../shared/settings.css`.
 2. Drive motion from `app.ticker` with wrap/modulo so it never ends. Clamp `dt`.
 3. Additive glow, not unlit `Graphics` outlines, unless the scene really wants wireframe.
-4. Add one link on `index.html`.
+4. Expose the scene's magic numbers through `mountSettings({ title, sections })`. Read `ui.state` in the ticker. Wipe-and-rebuild sprites when a count/size key changes. Do not invent a second menu.
+5. Add one link on `index.html`.
 
 ## Testing
 Meat Bag runs server on `localhost:8000` for testing and verification, if not running, remind Meat Bag to start it.

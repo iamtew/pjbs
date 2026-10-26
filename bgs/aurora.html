@@ -5,72 +5,118 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Aurora — PJBS</title>
   <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
 </head>
 <body>
   <script type="module">
     import {
       boot, rand, wrap, glowSprite, glowLine,
     } from '../shared/boot.js';
+    import { mountSettings, hexToPixi } from '../shared/settings.js';
 
-    const TEAL = 0x6fc3b8;
-    const INDIGO = 0x6d5cff;
-    const MAGENTA = 0xff4ad2;
-    const LIME = 0x6ee7b7;
+    const PAL = ['#6fc3b8', '#6d5cff', '#ff4ad2', '#6ee7b7'];
+    const REBUILD = new Set(['fogs', 'reset']);
+
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Aurora',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'fogs', label: 'Fog count', min: 4, max: 40, step: 1, def: 18, int: true },
+            { key: 'fogSzLo', label: 'Fog size min', min: 3, max: 16, step: 0.5, def: 7 },
+            { key: 'fogSzHi', label: 'Fog size max', min: 6, max: 22, step: 0.5, def: 14 },
+            { key: 'fogALo', label: 'Fog alpha min', min: 0.02, max: 0.25, step: 0.01, def: 0.06 },
+            { key: 'fogAHi', label: 'Fog alpha max', min: 0.04, max: 0.35, step: 0.01, def: 0.13 },
+            { key: 'fogVx', label: 'Fog drift X', min: 0, max: 40, step: 1, def: 14, int: true },
+            { key: 'fogVy', label: 'Fog drift Y', min: 0, max: 24, step: 1, def: 8, int: true },
+            { key: 'amp', label: 'Ribbon amp', min: 0.25, max: 2.5, step: 0.05, def: 1, fmt: x },
+            { key: 'thick', label: 'Ribbon thick', min: 0.25, max: 2.5, step: 0.05, def: 1, fmt: x },
+            { key: 'rSpd', label: 'Ribbon speed', min: 0.25, max: 2.5, step: 0.05, def: 1, fmt: x },
+            { key: 'step', label: 'Sample step', min: 3, max: 16, step: 1, def: 6, int: true },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'pal', label: 'Ribbon colors', type: 'palette', def: PAL },
+          ],
+        },
+      ],
+    });
 
     boot((app, PIXI, glow) => {
-      const { width: w0, height: h0 } = app.screen;
-
-      // Big soft fog so the ribbons sit in atmosphere, not on black.
-      const fog = Array.from({ length: 18 }, (_, i) => {
-        const s = glowSprite(PIXI, glow, [TEAL, INDIGO, MAGENTA][i % 3]);
-        s.x = rand(0, w0);
-        s.y = rand(0, h0);
-        s.scale.set(rand(7, 14));
-        s.alpha = rand(0.06, 0.13);
-        s.vx = rand(-14, 14);
-        s.vy = rand(-8, 8);
-        app.stage.addChild(s);
-        return s;
-      });
-
+      let fog = [];
       const wave = new PIXI.Graphics();
       wave.blendMode = 'add';
       app.stage.addChild(wave);
 
       const ribbons = [
-        { hue: TEAL, y: 0.38, amp: 0.12, thick: 1.15, speed: 0.55, phase: 0, freq: 1.1 },
-        { hue: INDIGO, y: 0.5, amp: 0.16, thick: 1.4, speed: 0.38, phase: 1.4, freq: 0.85 },
-        { hue: MAGENTA, y: 0.58, amp: 0.1, thick: 0.9, speed: 0.62, phase: 2.7, freq: 1.35 },
-        { hue: LIME, y: 0.44, amp: 0.08, thick: 0.7, speed: 0.48, phase: 4.1, freq: 1.7 },
+        { y: 0.38, amp: 0.12, thick: 1.15, speed: 0.55, phase: 0, freq: 1.1 },
+        { y: 0.5, amp: 0.16, thick: 1.4, speed: 0.38, phase: 1.4, freq: 0.85 },
+        { y: 0.58, amp: 0.1, thick: 0.9, speed: 0.62, phase: 2.7, freq: 1.35 },
+        { y: 0.44, amp: 0.08, thick: 0.7, speed: 0.48, phase: 4.1, freq: 1.7 },
       ];
+
+      function spawnFog() {
+        const s = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        for (const spr of fog) spr.destroy();
+        fog = Array.from({ length: s.fogs }, (_, i) => {
+          const spr = glowSprite(PIXI, glow, hexToPixi(s.pal[i % 3]));
+          spr.x = rand(0, w);
+          spr.y = rand(0, h);
+          spr.scale.set(rand(s.fogSzLo, s.fogSzHi));
+          spr.alpha = rand(s.fogALo, s.fogAHi);
+          spr.vx = rand(-s.fogVx, s.fogVx);
+          spr.vy = rand(-s.fogVy, s.fogVy);
+          spr.ci = i % 3;
+          app.stage.addChildAt(spr, 0);
+          return spr;
+        });
+      }
+
+      spawnFog();
+      ui.onChange = (_state, key) => {
+        if (REBUILD.has(key)) spawnFog();
+        else if (key === 'fogSzLo' || key === 'fogSzHi' || key === 'fogALo' || key === 'fogAHi' || key === 'fogVx' || key === 'fogVy') spawnFog();
+      };
 
       let t = 0;
       app.ticker.add((ticker) => {
-        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
         t += dt;
         const w = app.screen.width;
         const h = app.screen.height;
 
-        for (const s of fog) {
-          s.x += s.vx * dt;
-          s.y += s.vy * dt;
-          wrap(s, w, h, 280);
+        for (const spr of fog) {
+          spr.tint = hexToPixi(s.pal[spr.ci % s.pal.length]);
+          spr.x += spr.vx * dt;
+          spr.y += spr.vy * dt;
+          wrap(spr, w, h, 280);
         }
 
         wave.clear();
-        for (const r of ribbons) {
+        for (let i = 0; i < ribbons.length; i++) {
+          const r = ribbons[i];
           const pts = [];
           const cy = h * r.y;
-          const amp = h * r.amp;
-          for (let x = -12; x <= w + 12; x += 6) {
+          const amp = h * r.amp * s.amp;
+          for (let x = -12; x <= w + 12; x += s.step) {
             const u = x / w;
             const y =
               cy +
-              amp * Math.sin(u * r.freq * Math.PI * 2 + t * r.speed + r.phase) +
-              amp * 0.35 * Math.sin(u * 3.2 * r.freq + t * r.speed * 0.55);
+              amp * Math.sin(u * r.freq * Math.PI * 2 + t * r.speed * s.rSpd + r.phase) +
+              amp * 0.35 * Math.sin(u * 3.2 * r.freq + t * r.speed * s.rSpd * 0.55);
             pts.push(x, y);
           }
-          glowLine(wave, pts, r.hue, r.thick);
+          glowLine(wave, pts, hexToPixi(s.pal[i % s.pal.length]), r.thick * s.thick);
         }
       });
     });

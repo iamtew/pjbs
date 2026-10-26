@@ -74,6 +74,8 @@ export async function boot(setup, opts = {}) {
     resolution: Math.min(devicePixelRatio || 1, 2),
     preference: 'webgl',
   });
+  app.canvas.style.position = 'relative';
+  app.canvas.style.zIndex = '1';
   document.body.appendChild(app.canvas);
 
   const glow = glowTexture(PIXI);

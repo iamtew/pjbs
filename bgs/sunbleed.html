@@ -5,34 +5,62 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sunbleed — PJBS</title>
   <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
 </head>
 <body>
   <script type="module">
     import {
       boot, pointer, hsl, glowSprite, glowLine, rand, clamp, wrap,
     } from '../shared/boot.js';
+    import { mountSettings, hexToPixi, hexHsl } from '../shared/settings.js';
 
-    // A living star that won't sit still. Corona particles orbit a heat-wash
-    // canvas; flare ribbons peel off the limb.
-    const COLORS = [0xff3b1f, 0xff7a18, 0xffe566, 0xff2bd6, 0xff6b9d];
+    const PAL = ['#ff3b1f', '#ff7a18', '#ffe566', '#ff2bd6', '#ff6b9d'];
+    const REBUILD = new Set(['dens', 'reset']);
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Sunbleed',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'dens', label: 'Corona dens', min: 0.25, max: 2.5, step: 0.05, def: 1, fmt: x },
+            { key: 'spinLo', label: 'Spin min', min: 0.02, max: 0.4, step: 0.01, def: 0.08 },
+            { key: 'spinHi', label: 'Spin max', min: 0.1, max: 1, step: 0.01, def: 0.45 },
+            { key: 'radLo', label: 'Orbit min', min: 0.02, max: 0.6, step: 0.01, def: 0.15 },
+            { key: 'radHi', label: 'Orbit max', min: 0.4, max: 1.6, step: 0.01, def: 1.05 },
+            { key: 'bokeh', label: 'Bokeh mix', min: 0, max: 0.4, step: 0.01, def: 0.12 },
+            { key: 'szLo', label: 'Spark size min', min: 0.04, max: 0.8, step: 0.01, def: 0.1 },
+            { key: 'szHi', label: 'Spark size max', min: 0.1, max: 1.2, step: 0.01, def: 0.4 },
+            { key: 'bkSzLo', label: 'Bokeh size min', min: 0.6, max: 4, step: 0.05, def: 1.6 },
+            { key: 'bkSzHi', label: 'Bokeh size max', min: 1.2, max: 6, step: 0.05, def: 3.2 },
+            { key: 'R', label: 'Core radius', min: 0.08, max: 0.45, step: 0.01, def: 0.22 },
+            { key: 'flares', label: 'Flares', min: 1, max: 12, step: 1, def: 5, int: true },
+            { key: 'core', label: 'Core bloom', min: 0.4, max: 2.5, step: 0.05, def: 1, fmt: x },
+            { key: 'trail', label: 'Trail stretch', min: 1, max: 5, step: 0.1, def: 2.2 },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'pal', label: 'Corona colors', type: 'palette', def: PAL },
+            { key: 'coreC', label: 'Core', type: 'color', def: '#fff4c2' },
+          ],
+        },
+        {
+          id: 'pointer',
+          label: 'Pointer',
+          fields: [
+            { key: 'follow', label: 'Follow', min: 0, max: 0.2, step: 0.01, def: 0.06 },
+          ],
+        },
+      ],
+    });
 
     boot((app, PIXI, glow) => {
-      const { width: w0, height: h0 } = app.screen;
-      const n = clamp(Math.round((w0 * h0) / 3200), 140, 480);
-
-      const corona = [];
-      for (let i = 0; i < n; i++) {
-        const s = glowSprite(PIXI, glow, COLORS[i % COLORS.length]);
-        s.ang = rand(0, Math.PI * 2);
-        s.rad = rand(0.15, 1.05);
-        s.spin = rand(0.08, 0.45) * (Math.random() < 0.5 ? 1 : -1);
-        const big = Math.random() < 0.12;
-        s.size = big ? rand(1.6, 3.2) : rand(0.1, 0.4);
-        s.alpha = big ? rand(0.06, 0.14) : rand(0.35, 0.9);
-        app.stage.addChild(s);
-        corona.push(s);
-      }
-
+      let corona = [];
       const g = new PIXI.Graphics();
       g.blendMode = 'add';
       app.stage.addChild(g);
@@ -40,33 +68,73 @@
       const core = glowSprite(PIXI, glow, 0xfff4c2);
       app.stage.addChild(core);
 
+      function spawn() {
+        const st = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const n = clamp(Math.round((w * h) / 3200 * st.dens), 40, 700);
+        for (const spr of corona) spr.destroy();
+        corona = [];
+        for (let i = 0; i < n; i++) {
+          const spr = glowSprite(PIXI, glow, hexToPixi(st.pal[i % st.pal.length]));
+          spr.ang = rand(0, Math.PI * 2);
+          spr.rad = rand(st.radLo, st.radHi);
+          spr.spin = rand(st.spinLo, st.spinHi) * (Math.random() < 0.5 ? 1 : -1);
+          const big = Math.random() < st.bokeh;
+          spr.size = big ? rand(st.bkSzLo, st.bkSzHi) : rand(st.szLo, st.szHi);
+          spr.alpha = big ? rand(0.06, 0.14) : rand(0.35, 0.9);
+          spr.ci = i % st.pal.length;
+          app.stage.addChildAt(spr, 0);
+          corona.push(spr);
+        }
+      }
+
+      spawn();
+      ui.onChange = (_state, key) => {
+        if (
+          REBUILD.has(key) ||
+          key === 'spinLo' || key === 'spinHi' ||
+          key === 'radLo' || key === 'radHi' ||
+          key === 'bokeh' ||
+          key === 'szLo' || key === 'szHi' ||
+          key === 'bkSzLo' || key === 'bkSzHi'
+        ) spawn();
+      };
+
       let t = 0;
       app.ticker.add((ticker) => {
-        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
         t += dt;
         const w = app.screen.width;
         const h = app.screen.height;
-        const cx = w * (0.5 + (pointer.x - 0.5) * 0.06);
-        const cy = h * (0.52 + (pointer.y - 0.5) * 0.06);
-        const R = Math.min(w, h) * 0.22;
+        const cx = w * (0.5 + (pointer.x - 0.5) * s.follow);
+        const cy = h * (0.52 + (pointer.y - 0.5) * s.follow);
+        const R = Math.min(w, h) * s.R;
 
-        app.renderer.background.color = hsl(12 + 8 * Math.sin(t * 0.2), 90, 10 + 3 * Math.sin(t * 0.35));
+        const heat = hexHsl(s.pal[0]);
+        app.renderer.background.color = hsl(
+          heat.h + 8 * Math.sin(t * 0.2),
+          Math.max(70, heat.s),
+          10 + 3 * Math.sin(t * 0.35),
+        );
 
-        for (const s of corona) {
-          s.ang += s.spin * dt;
-          s.rad += Math.sin(t * 0.7 + s.ang * 3) * 0.04 * dt;
-          const wobble = 1 + 0.12 * Math.sin(t * 1.3 + s.ang * 5);
-          const rr = R * (0.55 + s.rad * 2.1) * wobble;
-          s.x = cx + Math.cos(s.ang) * rr;
-          s.y = cy + Math.sin(s.ang) * rr * 0.92;
-          wrap(s, w, h, 80);
-          s.rotation = s.ang + Math.PI / 2;
-          s.scale.set(s.size * 2.2, s.size);
+        for (const spr of corona) {
+          spr.tint = hexToPixi(s.pal[spr.ci % s.pal.length]);
+          spr.ang += spr.spin * dt;
+          spr.rad += Math.sin(t * 0.7 + spr.ang * 3) * 0.04 * dt;
+          const wobble = 1 + 0.12 * Math.sin(t * 1.3 + spr.ang * 5);
+          const rr = R * (0.55 + spr.rad * 2.1) * wobble;
+          spr.x = cx + Math.cos(spr.ang) * rr;
+          spr.y = cy + Math.sin(spr.ang) * rr * 0.92;
+          wrap(spr, w, h, 80);
+          spr.rotation = spr.ang + Math.PI / 2;
+          spr.scale.set(spr.size * s.trail, spr.size);
         }
 
         g.clear();
         g.position.set(0, 0);
-        for (let f = 0; f < 5; f++) {
+        for (let f = 0; f < s.flares; f++) {
           const pts = [];
           const a0 = t * (0.15 + f * 0.03) + f * 1.256;
           for (let i = 0; i <= 28; i++) {
@@ -75,12 +143,13 @@
             const r = R * (1.1 + u * 2.4 + 0.35 * Math.sin(u * 6 + t * 1.8 + f));
             pts.push(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
           }
-          glowLine(g, pts, COLORS[f % COLORS.length], 1.05);
+          glowLine(g, pts, hexToPixi(s.pal[f % s.pal.length]), 1.05);
         }
 
         const beat = Math.pow(0.5 + 0.5 * Math.sin(t * 1.15), 1.4);
+        core.tint = hexToPixi(s.coreC);
         core.position.set(cx, cy);
-        core.scale.set(5 + 7 * beat);
+        core.scale.set((5 + 7 * beat) * s.core);
         core.alpha = 0.55 + 0.4 * beat;
       });
     }, { background: 0x2a0608 });

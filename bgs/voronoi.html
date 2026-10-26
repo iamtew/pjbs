@@ -5,18 +5,49 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Voronoi — PJBS</title>
   <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
 </head>
 <body>
   <script type="module">
     import {
       boot, pointer, rand, wrap, glowSprite, hsl, GLOW_PASSES,
     } from '../shared/boot.js';
+    import { mountSettings, hexHsl } from '../shared/settings.js';
 
-    // Drifting sites. Each cell is the screen clipped by every other site's
-    // perpendicular bisector — that's Voronoi without painting every pixel.
-    const N = 48;
     const M = 80;
     const RINGS = [1, 0.68, 0.38];
+    const REBUILD = new Set(['sites', 'fogs', 'reset']);
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Voronoi',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'sites', label: 'Sites', min: 8, max: 80, step: 1, def: 48, int: true },
+            { key: 'drift', label: 'Site drift', min: 4, max: 60, step: 1, def: 28, int: true },
+            { key: 'flow', label: 'Flow push', min: 0, max: 60, step: 1, def: 28, int: true },
+            { key: 'hue', label: 'Hue crawl', min: 0, max: 120, step: 1, def: 55, int: true },
+            { key: 'cell', label: 'Cell color', type: 'color', def: '#c026d3' },
+            { key: 'fill', label: 'Fill amp', min: 0, max: 2, step: 0.05, def: 1, fmt: x },
+            { key: 'glow', label: 'Glow amp', min: 0.25, max: 2, step: 0.05, def: 1, fmt: x },
+            { key: 'fogs', label: 'Fog count', min: 0, max: 28, step: 1, def: 12, int: true },
+            { key: 'fogSzLo', label: 'Fog size min', min: 4, max: 20, step: 0.5, def: 9 },
+            { key: 'fogSzHi', label: 'Fog size max', min: 8, max: 24, step: 0.5, def: 16 },
+          ],
+        },
+        {
+          id: 'pointer',
+          label: 'Pointer',
+          fields: [
+            { key: 'rR', label: 'Repel radius', min: 0, max: 400, step: 5, def: 180, int: true },
+            { key: 'rF', label: 'Repel force', min: 0, max: 800, step: 10, def: 320, int: true },
+          ],
+        },
+      ],
+    });
 
     function clipHalf(poly, nx, ny, c) {
       if (poly.length < 6) return poly;
@@ -73,81 +104,102 @@
     }
 
     boot((app, PIXI, glow) => {
-      const { width: w0, height: h0 } = app.screen;
-
-      // Soft color fog so walls sit in a wash, not on a dark void.
-      const fog = Array.from({ length: 12 }, (_, i) => {
-        const s = glowSprite(PIXI, glow, hsl(i * 30, 95, 55));
-        s.x = rand(0, w0);
-        s.y = rand(0, h0);
-        s.scale.set(rand(9, 16));
-        s.alpha = rand(0.1, 0.18);
-        s.vx = rand(-22, 22);
-        s.vy = rand(-12, 12);
-        s.phase = rand(0, Math.PI * 2);
-        app.stage.addChild(s);
-        return s;
-      });
-
+      let fog = [];
+      let sites = [];
       const g = new PIXI.Graphics();
       g.blendMode = 'add';
       app.stage.addChild(g);
 
-      const sites = Array.from({ length: N }, (_, i) => {
-        const s = glowSprite(PIXI, glow, hsl(i * 7.5, 95, 62));
-        s.x = rand(0, w0);
-        s.y = rand(0, h0);
-        s.vx = rand(-28, 28);
-        s.vy = rand(-22, 22);
-        s.phase = rand(0, Math.PI * 2);
-        s.scale.set(0.5);
-        app.stage.addChild(s);
-        return s;
-      });
+      function spawnFog() {
+        const st = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        for (const spr of fog) spr.destroy();
+        fog = Array.from({ length: st.fogs }, (_, i) => {
+          const spr = glowSprite(PIXI, glow, hsl(i * 30, 95, 55));
+          spr.x = rand(0, w);
+          spr.y = rand(0, h);
+          spr.scale.set(rand(st.fogSzLo, st.fogSzHi));
+          spr.alpha = rand(0.1, 0.18);
+          spr.vx = rand(-22, 22);
+          spr.vy = rand(-12, 12);
+          spr.phase = rand(0, Math.PI * 2);
+          app.stage.addChildAt(spr, 0);
+          return spr;
+        });
+      }
+
+      function spawnSites() {
+        const st = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        for (const spr of sites) spr.destroy();
+        sites = Array.from({ length: st.sites }, (_, i) => {
+          const spr = glowSprite(PIXI, glow, hsl(i * 7.5, 95, 62));
+          spr.x = rand(0, w);
+          spr.y = rand(0, h);
+          spr.vx = rand(-st.drift, st.drift);
+          spr.vy = rand(-st.drift * 0.8, st.drift * 0.8);
+          spr.phase = rand(0, Math.PI * 2);
+          spr.scale.set(0.5);
+          app.stage.addChild(spr);
+          return spr;
+        });
+      }
+
+      spawnFog();
+      spawnSites();
+      ui.onChange = (_state, key) => {
+        if (key === 'fogs' || key === 'fogSzLo' || key === 'fogSzHi' || key === 'reset') spawnFog();
+        if (key === 'sites' || key === 'drift' || key === 'reset') spawnSites();
+      };
 
       let t = 0;
       app.ticker.add((ticker) => {
-        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
         t += dt;
         const w = app.screen.width;
         const h = app.screen.height;
         const px = pointer.x * w;
         const py = pointer.y * h;
-        const r2 = 180 * 180;
+        const r2 = s.rR * s.rR;
         const trip = 0.5 + 0.5 * Math.sin(t * 0.35);
+        const n = sites.length;
 
-        app.renderer.background.color = hsl((t * 28) % 360, 78, 7 + 3 * trip);
+        const cell = hexHsl(s.cell);
+        app.renderer.background.color = hsl((cell.h + t * 28) % 360, cell.s * 0.8, 7 + 3 * trip);
 
-        for (const s of fog) {
-          s.x += s.vx * dt;
-          s.y += s.vy * dt;
-          s.tint = hsl((t * 40 + s.phase * 50) % 360, 95, 58);
-          s.alpha = 0.09 + 0.12 * (0.5 + 0.5 * Math.sin(t * 1.1 + s.phase));
-          wrap(s, w, h, 280);
+        for (const spr of fog) {
+          spr.x += spr.vx * dt;
+          spr.y += spr.vy * dt;
+          spr.tint = hsl((t * 40 + spr.phase * 50) % 360, 95, 58);
+          spr.alpha = 0.09 + 0.12 * (0.5 + 0.5 * Math.sin(t * 1.1 + spr.phase));
+          wrap(spr, w, h, 280);
         }
 
-        for (const s of sites) {
-          let vx = s.vx + Math.sin(s.y * 0.004 + t * 1.3) * 28;
-          let vy = s.vy + Math.cos(s.x * 0.004 - t * 1.1) * 28;
-          const dx = s.x - px;
-          const dy = s.y - py;
+        for (const spr of sites) {
+          let vx = spr.vx + Math.sin(spr.y * 0.004 + t * 1.3) * s.flow;
+          let vy = spr.vy + Math.cos(spr.x * 0.004 - t * 1.1) * s.flow;
+          const dx = spr.x - px;
+          const dy = spr.y - py;
           const d2 = dx * dx + dy * dy;
-          if (d2 < r2) {
-            const f = (1 - d2 / r2) * 320 / Math.sqrt(d2 + 1);
+          if (s.rR > 0 && d2 < r2) {
+            const f = (1 - d2 / r2) * s.rF / Math.sqrt(d2 + 1);
             vx += dx * f;
             vy += dy * f;
           }
-          s.x += vx * dt;
-          s.y += vy * dt;
-          wrap(s, w, h, M);
+          spr.x += vx * dt;
+          spr.y += vy * dt;
+          wrap(spr, w, h, M);
         }
 
         const bounds = [-M, -M, w + M, -M, w + M, h + M, -M, h + M];
         g.clear();
-        for (let i = 0; i < N; i++) {
+        for (let i = 0; i < n; i++) {
           const si = sites[i];
           let poly = bounds;
-          for (let j = 0; j < N; j++) {
+          for (let j = 0; j < n; j++) {
             if (j === i) continue;
             const sj = sites[j];
             const nx = sj.x - si.x;
@@ -161,13 +213,13 @@
 
           const pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + si.phase);
           const wave = 0.5 + 0.5 * Math.sin(t * 1.4 + (si.x / w) * 6 + (si.y / h) * 5);
-          const hue = (t * 55 + si.phase * 80 + i * 13) % 360;
+          const hue = (cell.h + t * s.hue + si.phase * 80 + i * 13) % 360;
           const breath = 1 + 0.08 * Math.sin(t * 3.1 + si.phase);
-          const amp = 0.45 + pulse * 0.55 + wave * 0.25;
+          const amp = (0.45 + pulse * 0.55 + wave * 0.25) * s.glow;
 
           g.poly(poly).fill({
             color: hsl((hue + 180) % 360, 95, 52),
-            alpha: 0.05 + pulse * 0.1 + trip * 0.04,
+            alpha: (0.05 + pulse * 0.1 + trip * 0.04) * s.fill,
           });
 
           for (let r = 0; r < RINGS.length; r++) {

@@ -5,31 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kaleido — PJBS</title>
   <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
 </head>
 <body>
   <script type="module">
     import {
       boot, pointer, hsl, glowLine, glowSprite, rand,
     } from '../shared/boot.js';
+    import { mountSettings, hexToPixi, hexHsl } from '../shared/settings.js';
 
-    // Rotating n-fold mandala. Petals are glow-pass curves; the wash is a
-    // living hue so this is never a black canvas.
-    const FOLDS = 10;
+    const REBUILD = new Set(['bokeh', 'reset']);
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Kaleido',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'folds', label: 'Folds', min: 4, max: 18, step: 1, def: 10, int: true },
+            { key: 'spin', label: 'Spin', min: 0, max: 0.6, step: 0.01, def: 0.18 },
+            { key: 'wobble', label: 'Petal wobble', min: 0, max: 1.2, step: 0.02, def: 0.42 },
+            { key: 'thick', label: 'Petal thick', min: 0.3, max: 2, step: 0.05, def: 0.85 },
+            { key: 'huePetal', label: 'Petal hue crawl', min: 0, max: 60, step: 1, def: 22, int: true },
+            { key: 'hueWash', label: 'Wash hue crawl', min: 0, max: 30, step: 1, def: 8, int: true },
+            { key: 'bokeh', label: 'Bokeh count', min: 0, max: 40, step: 1, def: 16, int: true },
+            { key: 'bkSzLo', label: 'Bokeh size min', min: 2, max: 14, step: 0.5, def: 5 },
+            { key: 'bkSzHi', label: 'Bokeh size max', min: 4, max: 18, step: 0.5, def: 11 },
+            { key: 'core', label: 'Core size', min: 0.4, max: 2.5, step: 0.05, def: 1, fmt: x },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'petal', label: 'Petal', type: 'color', def: '#f472b6' },
+            { key: 'wash', label: 'Wash', type: 'color', def: '#140018' },
+            { key: 'coreC', label: 'Core', type: 'color', def: '#fff1c1' },
+          ],
+        },
+        {
+          id: 'pointer',
+          label: 'Pointer',
+          fields: [
+            { key: 'driftX', label: 'Center drift X', min: 0, max: 80, step: 1, def: 28, int: true },
+            { key: 'driftY', label: 'Center drift Y', min: 0, max: 60, step: 1, def: 18, int: true },
+          ],
+        },
+      ],
+    });
 
     boot((app, PIXI, glow) => {
-      const { width: w0, height: h0 } = app.screen;
-
-      const bokeh = Array.from({ length: 16 }, (_, i) => {
-        const s = glowSprite(PIXI, glow, hsl(i * 40, 90, 60));
-        s.x = rand(0, w0);
-        s.y = rand(0, h0);
-        s.scale.set(rand(5, 11));
-        s.alpha = rand(0.08, 0.16);
-        s.ph = rand(0, 6.28);
-        app.stage.addChild(s);
-        return s;
-      });
-
+      let bokeh = [];
       const g = new PIXI.Graphics();
       g.blendMode = 'add';
       app.stage.addChild(g);
@@ -38,29 +66,54 @@
       core.blendMode = 'add';
       app.stage.addChild(core);
 
+      function spawnBokeh() {
+        const s = ui.state;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        for (const spr of bokeh) spr.destroy();
+        bokeh = Array.from({ length: s.bokeh }, (_, i) => {
+          const spr = glowSprite(PIXI, glow, hsl(i * 40, 90, 60));
+          spr.x = rand(0, w);
+          spr.y = rand(0, h);
+          spr.scale.set(rand(s.bkSzLo, s.bkSzHi));
+          spr.alpha = rand(0.08, 0.16);
+          spr.ph = rand(0, 6.28);
+          app.stage.addChildAt(spr, 0);
+          return spr;
+        });
+      }
+
+      spawnBokeh();
+      ui.onChange = (_state, key) => {
+        if (REBUILD.has(key) || key === 'bkSzLo' || key === 'bkSzHi') spawnBokeh();
+      };
+
       let t = 0;
       app.ticker.add((ticker) => {
-        const dt = Math.min(ticker.deltaMS / 1000, 0.05);
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
         t += dt;
         const w = app.screen.width;
         const h = app.screen.height;
-        const cx = w * 0.5 + (pointer.x - 0.5) * 28;
-        const cy = h * 0.5 + (pointer.y - 0.5) * 18;
+        const cx = w * 0.5 + (pointer.x - 0.5) * s.driftX;
+        const cy = h * 0.5 + (pointer.y - 0.5) * s.driftY;
         const reach = Math.hypot(w, h) * 0.42;
 
-        app.renderer.background.color = hsl((t * 8) % 360, 70, 7);
+        const petal = hexHsl(s.petal);
+        const wash = hexHsl(s.wash);
+        app.renderer.background.color = hsl((wash.h + t * s.hueWash) % 360, wash.s, wash.l);
 
-        for (const s of bokeh) {
-          s.x = cx + Math.cos(t * 0.15 + s.ph) * reach * 0.55;
-          s.y = cy + Math.sin(t * 0.12 + s.ph * 1.3) * reach * 0.4;
-          s.tint = hsl((t * 18 + s.ph * 50) % 360, 95, 58);
-          s.alpha = 0.07 + 0.08 * (0.5 + 0.5 * Math.sin(t * 0.7 + s.ph));
+        for (const spr of bokeh) {
+          spr.x = cx + Math.cos(t * 0.15 + spr.ph) * reach * 0.55;
+          spr.y = cy + Math.sin(t * 0.12 + spr.ph * 1.3) * reach * 0.4;
+          spr.tint = hsl((petal.h + t * 18 + spr.ph * 50) % 360, petal.s, 58);
+          spr.alpha = 0.07 + 0.08 * (0.5 + 0.5 * Math.sin(t * 0.7 + spr.ph));
         }
 
         g.clear();
         g.position.set(cx, cy);
-        for (let k = 0; k < FOLDS; k++) {
-          const base = (k / FOLDS) * Math.PI * 2 + t * 0.18;
+        for (let k = 0; k < s.folds; k++) {
+          const base = (k / s.folds) * Math.PI * 2 + t * s.spin;
           const pts = [];
           for (let i = 0; i <= 36; i++) {
             const u = i / 36;
@@ -70,18 +123,18 @@
               (0.72 + 0.28 * Math.sin(u * 7 + t * 1.6 + k));
             const a =
               base +
-              0.42 * Math.sin(u * 5 + t * 1.1) +
-              0.18 * Math.sin(u * 13 - t * 1.7);
+              s.wobble * Math.sin(u * 5 + t * 1.1) +
+              s.wobble * 0.43 * Math.sin(u * 13 - t * 1.7);
             pts.push(Math.cos(a) * r, Math.sin(a) * r);
           }
-          glowLine(g, pts, hsl((t * 22 + k * 36) % 360, 95, 58), 0.85 + 0.25 * Math.sin(t + k));
+          glowLine(g, pts, hsl((petal.h + t * s.huePetal + k * 36) % 360, petal.s, 58), s.thick + 0.25 * Math.sin(t + k));
         }
 
         const breath = 0.5 + 0.5 * Math.sin(t * 1.4);
         core.position.set(cx, cy);
-        core.scale.set(2.2 + 3.4 * breath);
+        core.scale.set((2.2 + 3.4 * breath) * s.core);
         core.alpha = 0.35 + 0.4 * breath;
-        core.tint = hsl((t * 14) % 360, 40, 85);
+        core.tint = hexToPixi(s.coreC);
       });
     }, { background: 0x140018 });
   </script>
