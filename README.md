@@ -1,4 +1,4 @@
-# PJBS — Pixi JS BackgroundS
+# PJBS - Pixi JS BackgroundS
 
 Fullscreen looping PixiJS scenes for OBS browser sources. Catalog is `index.html`; each scene lives in `bgs/`.
 
