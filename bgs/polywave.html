@@ -21,8 +21,9 @@
           label: 'Animation',
           fields: [
             { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
-            { key: 'density', label: 'Density', min: 12, max: 48, step: 1, def: 32, int: true },
+            { key: 'density', label: 'Density', min: 12, max: 96, step: 1, def: 32, int: true },
             { key: 'swell', label: 'Swell', min: 0.2, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'chop', label: 'Chop', min: 0, max: 2, step: 0.05, def: 0.25, fmt: x },
             { key: 'horizon', label: 'Horizon', min: 0.12, max: 0.55, step: 0.01, def: 0.24 },
           ],
         },
@@ -31,6 +32,7 @@
           label: 'Look',
           fields: [
             { key: 'edge', label: 'Edge', type: 'color', def: '#ff5a00' },
+            { key: 'accent', label: 'Accent', type: 'color', def: '#22d3ee' },
             { key: 'glow', label: 'Glow', min: 0.3, max: 2, step: 0.05, def: 1, fmt: x },
           ],
         },
@@ -45,6 +47,17 @@
         + Math.sin((nx + nz) * 1.3 + t * 0.35) * 0.2
       );
     }
+
+    function hash01(c, r) {
+      let n = (Math.imul(c, 374761393) + Math.imul(r, 668265263)) | 0;
+      n = Math.imul(n ^ (n >>> 13), 1274126177);
+      return (n >>> 0) / 4294967296;
+    }
+
+    const LX = 0.32;
+    const LY = 0.9;
+    const LZ = 0.28;
+    const LLEN = Math.hypot(LX, LY, LZ);
 
     boot((app, PIXI) => {
       const faces = new PIXI.Graphics();
@@ -90,6 +103,9 @@
 
         const xy = new Float32Array(gw * (rows + 1) * 2);
         const zz = new Float32Array(gw * (rows + 1));
+        const hh = new Float32Array(gw * (rows + 1));
+        const gx = new Float32Array(gw * (rows + 1));
+        const gz = new Float32Array(gw * (rows + 1));
         const at = (c, r) => r * gw + c;
 
         for (let r = 0; r <= rows; r++) {
@@ -102,15 +118,22 @@
           const damp = Math.pow(1 - u, 0.4);
           for (let c = 0; c <= cols; c++) {
             const nx = (c / cols - 0.5) * 8;
-            const y = wave(nx, nz, t, amp) * damp;
+            const y = (wave(nx, nz, t, amp) + (hash01(c, r) * 2 - 1) * s.chop) * damp;
             const i = at(c, r);
             xy[i * 2] = w * 0.5 + (c / cols - 0.5) * 2 * xHalf * k;
             xy[i * 2 + 1] = yVanish + (A / focal - y) * k;
             zz[i] = zn;
+            hh[i] = y;
+            gx[i] = nx;
+            gz[i] = nz;
           }
         }
 
         const edge = hexToPixi(s.edge);
+        const accent = hexToPixi(s.accent);
+        const ar = (accent >> 16) & 255;
+        const ag = (accent >> 8) & 255;
+        const ab = accent & 255;
         faces.clear();
         edges.clear();
 
@@ -142,7 +165,27 @@
               const cx = xy[c0 * 2];
               const cy = xy[c0 * 2 + 1];
               if (off(ax, ay) && off(bx, by) && off(cx, cy)) continue;
-              faces.poly([ax, ay, bx, by, cx, cy]).fill({ color: 0x000000 });
+              const e1x = gx[b0] - gx[a0];
+              const e1y = hh[b0] - hh[a0];
+              const e1z = gz[b0] - gz[a0];
+              const e2x = gx[c0] - gx[a0];
+              const e2y = hh[c0] - hh[a0];
+              const e2z = gz[c0] - gz[a0];
+              let nx3 = e1y * e2z - e1z * e2y;
+              let ny3 = e1z * e2x - e1x * e2z;
+              let nz3 = e1x * e2y - e1y * e2x;
+              if (ny3 < 0) {
+                nx3 = -nx3;
+                ny3 = -ny3;
+                nz3 = -nz3;
+              }
+              const nlen = Math.hypot(nx3, ny3, nz3) || 1;
+              const ndotl = Math.max(0, (nx3 * LX + ny3 * LY + nz3 * LZ) / (nlen * LLEN));
+              const fog = Math.max(0, Math.min(1, ((ay + by + cy) / 3 - yFar) / (h * 0.34)));
+              // Sheen only on facing facets so orange wire stays the read.
+              const kFill = 0.16 * ndotl * ndotl * ndotl * fog * fog;
+              const col = ((ar * kFill) << 16) | ((ag * kFill) << 8) | (ab * kFill);
+              faces.poly([ax, ay, bx, by, cx, cy]).fill({ color: col });
             }
           }
         }
@@ -154,9 +197,11 @@
           const y1 = xy[ib * 2 + 1];
           if (skip(x0, y0, x1, y1)) return;
           const zn = (zz[ia] + zz[ib]) * 0.5;
+          const fog = Math.max(0, Math.min(1, ((y0 + y1) * 0.5 - yFar) / (h * 0.34)));
+          const scale = s.glow * fog * fog;
+          if (scale < 0.02) return;
           const bi = Math.min(7, (zn * 8) | 0);
-          const fade = 1 - zn;
-          glowLine(edges, [x0, y0, x1, y1], edge, s.glow * (0.08 + 0.92 * fade * fade), buckets[bi]);
+          glowLine(edges, [x0, y0, x1, y1], edge, scale, buckets[bi]);
         };
 
         for (let r = 0; r <= rows; r++) {
