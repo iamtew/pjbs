@@ -38,7 +38,7 @@ Current scenes:
 - Drift: `starfield` (flow-field streaks + bokeh), `rainveil` (vertical rain + floor splash), `ember` (rising sparks, heat wash), `flock` (boid glow sprites)
 - Wash: `aurora` (ribbons in fog), `sunbleed` (orbiting corona), `caustic` (wobbling light pools), `lichten` (branching discharge)
 - Orbit: `vortex` (tunnel + sparks), `kaleido` (n-fold mandala), `radar` (sweep + pings), `lissajous` (harmonic trails), `torus` (glow beads), `merkaba` (star tetrahedron)
-- Lattice: `hexpulse` (honeycomb wave), `voronoi` (neon cell walls), `circuit` (orthogonal traces + packets), `warp` (perspective grid), `flower` (Flower of Life), `yantra` (triangles, lotus, bindu), `cubes` (isometric cube field)
+- Lattice: `hexpulse` (honeycomb wave), `voronoi` (neon cell walls), `circuit` (orthogonal traces + packets), `warp` (perspective grid), `polywave` (low-poly water sheet), `flower` (Flower of Life), `yantra` (triangles, lotus, bindu), `cubes` (isometric cube field)
 
 ## Add a background
 1. New file `bgs/<name>.html` — `import { boot, glowSprite, glowLine, wrap } from '../shared/boot.js'` and `import { mountSettings } from '../shared/settings.js'`. Link `../shared/settings.css`.

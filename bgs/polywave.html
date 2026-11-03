@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Poly wave — PJBS</title>
+  <link rel="stylesheet" href="../shared/style.css">
+  <link rel="stylesheet" href="../shared/settings.css">
+</head>
+<body>
+  <script type="module">
+    import { boot, glowLine, GLOW_PASSES } from '../shared/boot.js';
+    import { mountSettings, hexToPixi } from '../shared/settings.js';
+
+    const x = (v) => `${v.toFixed(2)}x`;
+    const ui = mountSettings({
+      title: 'Poly wave',
+      sections: [
+        {
+          id: 'animation',
+          label: 'Animation',
+          fields: [
+            { key: 'speed', label: 'Speed', min: 0.1, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'density', label: 'Density', min: 12, max: 48, step: 1, def: 32, int: true },
+            { key: 'swell', label: 'Swell', min: 0.2, max: 3, step: 0.05, def: 1, fmt: x },
+            { key: 'horizon', label: 'Horizon', min: 0.12, max: 0.55, step: 0.01, def: 0.24 },
+          ],
+        },
+        {
+          id: 'look',
+          label: 'Look',
+          fields: [
+            { key: 'edge', label: 'Edge', type: 'color', def: '#ff5a00' },
+            { key: 'glow', label: 'Glow', min: 0.3, max: 2, step: 0.05, def: 1, fmt: x },
+          ],
+        },
+      ],
+    });
+
+    // nx, nz span a few swell-lengths. Mixed signs so the crests don't all run one way.
+    function wave(nx, nz, t, amp) {
+      return amp * (
+        Math.sin(nx * 2.2 + nz * 0.4 + t * 0.9) * 0.55
+        + Math.sin(nx * 0.7 - nz * 1.6 + t * 0.55) * 0.35
+        + Math.sin((nx + nz) * 1.3 + t * 0.35) * 0.2
+      );
+    }
+
+    boot((app, PIXI) => {
+      const faces = new PIXI.Graphics();
+      const edges = new PIXI.Graphics();
+      edges.blendMode = 'add';
+      app.stage.addChild(faces);
+      app.stage.addChild(edges);
+
+      // Eight depth buckets so each edge does not allocate its own pass list.
+      const buckets = [];
+      for (let i = 0; i < 8; i++) {
+        const fade = 1 - (i + 0.5) / 8;
+        const a = fade * fade;
+        // Far rows are a thin haze; the wide bloom pass is only worth it up close.
+        buckets.push(i < 5
+          ? GLOW_PASSES.map(([width, alpha]) => [width, alpha * a])
+          : [[2.2, 0.55 * a]]);
+      }
+
+      let t = 0;
+      app.ticker.add((ticker) => {
+        const s = ui.state;
+        const dt = Math.min(ticker.deltaMS / 1000, 0.05) * s.speed;
+        t += dt;
+        const w = app.screen.width;
+        const h = app.screen.height;
+        const cols = s.density;
+        const rows = Math.max(8, Math.round(cols * 16 / 28));
+        const gw = cols + 1;
+        const amp = s.swell * 0.5;
+
+        // Far row is the horizon. Near row stays below the frame on a crest,
+        // so the visible sheet is the sloping middle, not a cut rim.
+        const NEAR = 1;
+        const FAR = 5.4;
+        const focal = h;
+        const yFar = h * s.horizon;
+        const yNear = h * 1.72;
+        const span = yNear - yFar;
+        const A = span * NEAR * FAR / (FAR - NEAR);
+        const yVanish = yFar - A / FAR;
+        const xHalf = w * 0.7 * FAR / focal;
+
+        const xy = new Float32Array(gw * (rows + 1) * 2);
+        const zz = new Float32Array(gw * (rows + 1));
+        const at = (c, r) => r * gw + c;
+
+        for (let r = 0; r <= rows; r++) {
+          const u = r / rows;
+          const z = NEAR + (FAR - NEAR) * u;
+          const k = focal / z;
+          const nz = u * 8;
+          const zn = u;
+          // Flatten toward the horizon so the far edge is a straight line.
+          const damp = Math.pow(1 - u, 0.4);
+          for (let c = 0; c <= cols; c++) {
+            const nx = (c / cols - 0.5) * 8;
+            const y = wave(nx, nz, t, amp) * damp;
+            const i = at(c, r);
+            xy[i * 2] = w * 0.5 + (c / cols - 0.5) * 2 * xHalf * k;
+            xy[i * 2 + 1] = yVanish + (A / focal - y) * k;
+            zz[i] = zn;
+          }
+        }
+
+        const edge = hexToPixi(s.edge);
+        faces.clear();
+        edges.clear();
+
+        const m = 48;
+        const off = (x0, y0) => x0 < -m || x0 > w + m || y0 < -m || y0 > h + m;
+        const skip = (x0, y0, x1, y1) => (
+          (x0 < -m && x1 < -m) || (x0 > w + m && x1 > w + m)
+          || (y0 < -m && y1 < -m) || (y0 > h + m && y1 > h + m)
+        );
+
+        for (let r = rows - 1; r >= 0; r--) {
+          for (let c = 0; c < cols; c++) {
+            const i00 = at(c, r);
+            const i10 = at(c + 1, r);
+            const i01 = at(c, r + 1);
+            const i11 = at(c + 1, r + 1);
+            const flip = (c + r) & 1;
+            const tri = flip
+              ? [i00, i10, i01, i10, i11, i01]
+              : [i00, i11, i01, i00, i10, i11];
+            for (let p = 0; p < 6; p += 3) {
+              const a0 = tri[p];
+              const b0 = tri[p + 1];
+              const c0 = tri[p + 2];
+              const ax = xy[a0 * 2];
+              const ay = xy[a0 * 2 + 1];
+              const bx = xy[b0 * 2];
+              const by = xy[b0 * 2 + 1];
+              const cx = xy[c0 * 2];
+              const cy = xy[c0 * 2 + 1];
+              if (off(ax, ay) && off(bx, by) && off(cx, cy)) continue;
+              faces.poly([ax, ay, bx, by, cx, cy]).fill({ color: 0x000000 });
+            }
+          }
+        }
+
+        const draw = (ia, ib) => {
+          const x0 = xy[ia * 2];
+          const y0 = xy[ia * 2 + 1];
+          const x1 = xy[ib * 2];
+          const y1 = xy[ib * 2 + 1];
+          if (skip(x0, y0, x1, y1)) return;
+          const zn = (zz[ia] + zz[ib]) * 0.5;
+          const bi = Math.min(7, (zn * 8) | 0);
+          const fade = 1 - zn;
+          glowLine(edges, [x0, y0, x1, y1], edge, s.glow * (0.08 + 0.92 * fade * fade), buckets[bi]);
+        };
+
+        for (let r = 0; r <= rows; r++) {
+          for (let c = 0; c < cols; c++) draw(at(c, r), at(c + 1, r));
+        }
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c <= cols; c++) draw(at(c, r), at(c, r + 1));
+          for (let c = 0; c < cols; c++) {
+            if ((c + r) & 1) draw(at(c, r), at(c + 1, r + 1));
+            else draw(at(c + 1, r), at(c, r + 1));
+          }
+        }
+      });
+    }, { background: 0x000000 });
+  </script>
+</body>
+</html>
